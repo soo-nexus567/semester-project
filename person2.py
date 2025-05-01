@@ -12,7 +12,8 @@ def break_into_phrases(text, phrase_length=5):
 
 def find_matches(doc1, doc2):
     phrases = break_into_phrases(doc1)
-    matches_rabin = []
+    # Lists to store (phrase, [positions]) tuples for each algorithm
+    matches_rabin = [] 
     matches_kmp = []
     matches_naive = []
 
@@ -21,13 +22,15 @@ def find_matches(doc1, doc2):
         kmp_positions = kmp_search(doc2, phrase)
         naive_positions = naive_search(doc2, phrase)
         
+        # Append (phrase, positions) tuple if positions were found
         if rabin_positions:
-            matches_rabin.append(phrase)
+            matches_rabin.append((phrase, rabin_positions))
         if kmp_positions:
-            matches_kmp.append(phrase)
+            matches_kmp.append((phrase, kmp_positions))
         if naive_positions:
-            matches_naive.append(phrase)
+            matches_naive.append((phrase, naive_positions))
 
+    # Return a dictionary containing the lists of tuples
     return {
         "Rabin-Karp": matches_rabin,
         "KMP": matches_kmp,
