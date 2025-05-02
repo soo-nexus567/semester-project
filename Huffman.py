@@ -43,16 +43,16 @@ class Huffman:
         # Reverse the Huffman codes for decoding
         reverse_huff_codes = {v: k for k, v in huffman_dict.items()}
         #Decoding the Huffman Coded Generated
-        decoded_text = ""
-        current_bits = ""
+        self.decoded_text = ""
+        self.current_bits = ""
         reverse_codes = {v: k for k, v in huffman_dict.items()}
 
         #Travese through each bit
         for bit in encoded_str:
-            current_bits += bit
-            if current_bits in reverse_codes:
-                decoded_text += reverse_codes[current_bits]
-                current_bits = ""
+            self.current_bits += bit
+            if self.current_bits in reverse_codes:
+                self.decoded_text += reverse_codes[self.current_bits]
+                self.current_bits = ""
 
         # Return the Huffman codes and reverse codes
         return huffman_dict, self.reverse_huff_codes
@@ -83,17 +83,17 @@ class Huffman:
         return binary_string
     # Function to decode the binary string back to text using reverse Huffman codes
     def decode_text(self, binary_string):
-        decoded_text = []
+        self.decoded_text = []
         current_code = ""
         
         # Read each bit from the binary string and try to match it with Huffman codes
         for bit in binary_string:
             current_code += bit
             if current_code in self.reverse_huff_codes:
-                decoded_text.append(self.reverse_huff_codes[current_code])
+                self.decoded_text.append(self.reverse_huff_codes[current_code])
                 current_code = ""
         
-        return ''.join(decoded_text)
+        return ''.join(self.decoded_text)
 
     # Function to open file and return content as a string
     def open_file(self):
@@ -150,4 +150,7 @@ class Huffman:
 
 
                 # Display the decoded text in the separate text widget
-                print(decoded_text)
+                print(self.decoded_text)
+huff = Huffman()
+huff.open_file()
+huff.decode_bin_file()
