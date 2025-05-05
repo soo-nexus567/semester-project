@@ -1,0 +1,8 @@
+Title: Refactoring Principles in Undergraduate Projects Author: Alice Nguyen Date: 2024-11-12
+Abstract: Refactoring is the disciplined practice of improving internal code structure without altering external behavior. Students should cultivate habitual reflection over their code, ensuring efficiency and readability. This paper surveys common refactoring patterns employed in senior‑level computer‑science courses and evaluates their impact on maintainability metrics.
+Body:
+	•	Introduction Writing clean code early in one’s career fosters scalable design habits. As Lee notes in “Efficient String Matching in Academic Integrity Systems” [2], early optimization sacrifices are outweighed by long‑term gains in clarity.
+	•	Core Principles • Encapsulation of change • Removal of magic numbers • Consistent naming conventions Students should cultivate habitual reflection over their code, ensuring efficiency and readability.
+	•	Case Study A semester‑long capstone refactoring exercise reduced cyclomatic complexity by 21 % and cut duplicated lines by 14 %.
+	•	Discussion Phrase‑level matching algorithms such as KMP or Rabin‑Karp prove vital for real‑time plagiarism detection in refactor‑heavy coursework.
+References [2] Lee, B. (2025). Efficient String Matching in Academic Integrity Systems. [3] Martínez, C. (2025). Visualizing Citation Networks: A Case Study at CSUF.
