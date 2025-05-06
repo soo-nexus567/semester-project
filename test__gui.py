@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import filedialog, scrolledtext, messagebox, ttk
 from person2 import find_matches
 from naive import naive_search
-from Mergesort import merge_sort
+from mergeSort import merge_sort
 import re
 import os
 import networkx as nx
