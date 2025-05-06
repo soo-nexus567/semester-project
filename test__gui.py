@@ -1,129 +1,540 @@
 import tkinter as tk
-from tkinter import filedialog, scrolledtext, messagebox
+from tkinter import filedialog, scrolledtext, messagebox, ttk
 from person2 import find_matches
 from naive import naive_search
+from mergeSort import merge_sort
+import re
+import os
+import networkx as nx
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-class PlagiarismDetectorGUI:
+class DocumentInfo:
+    """A class for storing and extracting document information and metadata."""
+    def __init__(self, path):
+        self.path = path
+        self.title = ""
+        self.author = ""
+        self.date = ""
+        self.content = ""
+        self.references = []
+        self.keywords = []
+        self.abstract = ""
+        self.sections = {}
+        self.extract_metadata()
+    
+    def extract_metadata(self):
+        try:
+            with open(self.path, 'r', encoding='utf-8') as file:
+                self.content = file.read()
+                self._extract_basic_metadata()
+                self._extract_abstract()
+                self._extract_references()
+                self._extract_keywords()
+                self._extract_sections()
+        except Exception as e:
+            print(f"Error reading file {self.path}: {str(e)}")
+    
+    def _extract_basic_metadata(self):
+        # Extract title
+        title_patterns = [
+            r'Title:\s*(.*?)(?:\n|$)',
+            r'^\s*#\s+(.*?)(?:\n|$)',
+            r'^\s*TITLE:\s*(.*?)(?:\n|$)',
+            r'^\s*<title>(.*?)</title>'
+        ]
+        
+        for pattern in title_patterns:
+            title_match = re.search(pattern, self.content, re.IGNORECASE | re.MULTILINE)
+            if title_match:
+                self.title = title_match.group(1).strip()
+                break
+        
+        if not self.title:
+            self.title = os.path.basename(self.path)
+        
+        # Extract author
+        author_patterns = [
+            r'Author:\s*(.*?)(?:\n|$)',
+            r'By:\s*(.*?)(?:\n|$)',
+            r'^\s*AUTHOR:\s*(.*?)(?:\n|$)',
+            r'Written by\s*[:;]\s*(.*?)(?:\n|$)'
+        ]
+        
+        for pattern in author_patterns:
+            author_match = re.search(pattern, self.content, re.IGNORECASE | re.MULTILINE)
+            if author_match:
+                self.author = author_match.group(1).strip()
+                break
+        
+        # Extract date
+        date_patterns = [
+            r'Date:\s*(.*?)(?:\n|$)',
+            r'Published:\s*(.*?)(?:\n|$)',
+            r'^\s*DATE:\s*(.*?)(?:\n|$)',
+            r'\((\d{4}(?:-\d{2}-\d{2})?)\)',
+            r'(\d{1,2}/\d{1,2}/\d{2,4})',
+            r'(\d{4}-\d{2}-\d{2})'
+        ]
+        
+        for pattern in date_patterns:
+            date_match = re.search(pattern, self.content, re.IGNORECASE | re.MULTILINE)
+            if date_match:
+                self.date = date_match.group(1).strip()
+                break
+    
+    def _extract_abstract(self):
+        abstract_patterns = [
+            r'Abstract[:\s]+(.*?)(?:\n\n|\n[A-Z]|\n\d|\n\t|$)',
+            r'ABSTRACT[:\s]+(.*?)(?:\n\n|\n[A-Z]|\n\d|\n\t|$)',
+            r'Summary[:\s]+(.*?)(?:\n\n|\n[A-Z]|\n\d|\n\t|$)'
+        ]
+        
+        for pattern in abstract_patterns:
+            abstract_match = re.search(pattern, self.content, re.IGNORECASE | re.DOTALL)
+            if abstract_match:
+                raw_abstract = abstract_match.group(1).strip()
+                self.abstract = re.sub(r'\n(?!\n)', ' ', raw_abstract)
+                self.abstract = re.sub(r'\s+', ' ', self.abstract).strip()
+                break
+    
+    def _extract_references(self):
+        ref_section_patterns = [
+            r'References:(.*?)(?:\n\n|$)',
+            r'REFERENCES[:\s]+(.*?)(?:\n\n|$)',
+            r'Bibliography:(.*?)(?:\n\n|$)',
+            r'Works Cited:(.*?)(?:\n\n|$)'
+        ]
+        
+        self.references = []
+        
+        for pattern in ref_section_patterns:
+            ref_section = re.search(pattern, self.content, re.IGNORECASE | re.DOTALL)
+            if ref_section:
+                ref_text = ref_section.group(1)
+                
+                # Try different reference formats
+                ref_matches = re.findall(r'\[\d+\]\s*(.*?)(?:\.\s|\.\n|$)', ref_text)
+                if ref_matches:
+                    self.references.extend([ref.strip() for ref in ref_matches])
+                    continue
+                
+                ref_matches = re.findall(r'\d+\.\s*(.*?)(?:\.\s|\.\n|$)', ref_text)
+                if ref_matches:
+                    self.references.extend([ref.strip() for ref in ref_matches])
+                    continue
+                
+                ref_matches = re.findall(r'([A-Z][^\.]+\(\d{4}\)[^\.]+\.)', ref_text)
+                if ref_matches:
+                    self.references.extend([ref.strip() for ref in ref_matches])
+                    continue
+                
+                if not self.references:
+                    lines = [line.strip() for line in ref_text.split('\n') if line.strip()]
+                    self.references.extend(lines)
+        
+        if not self.references:
+            citations = re.findall(r'[\(\[]([\w\s]+,\s*\d{4})[\)\]]', self.content)
+            self.references = list(set(citations))
+    
+    def _extract_keywords(self):
+        keyword_patterns = [
+            r'Keywords?[:\s]+(.*?)(?:\n\n|\n[A-Z]|\n\d|\n\t|$)',
+            r'Key\s*words?[:\s]+(.*?)(?:\n\n|\n[A-Z]|\n\d|\n\t|$)',
+            r'Tags?[:\s]+(.*?)(?:\n\n|\n[A-Z]|\n\d|\n\t|$)'
+        ]
+        
+        for pattern in keyword_patterns:
+            keyword_match = re.search(pattern, self.content, re.IGNORECASE | re.MULTILINE)
+            if keyword_match:
+                keyword_text = keyword_match.group(1).strip()
+                if ';' in keyword_text:
+                    self.keywords = [k.strip() for k in keyword_text.split(';')]
+                else:
+                    self.keywords = [k.strip() for k in keyword_text.split(',')]
+                break
+    
+    def _extract_sections(self):
+        section_pattern = r'(?:^|\n)(?:\d+\.\s*)?([A-Z][^a-z\n]{2,}[A-Za-z\s]+)(?:\n|\:)(.*?)(?=(?:\n(?:\d+\.\s*)?[A-Z][^a-z\n]{2,}[A-Za-z\s]+(?:\n|\:))|$)'
+        
+        section_matches = re.finditer(section_pattern, self.content, re.DOTALL)
+        
+        for match in section_matches:
+            section_title = match.group(1).strip()
+            section_content = match.group(2).strip()
+            section_content = re.sub(r'\n+', '\n', section_content)
+            self.sections[section_title] = section_content
+    
+    def get_citation_info(self):
+        authors_cited = []
+        
+        citation_pattern = r'\(([A-Z][a-z]+(?:\s+et\s+al\.)?),\s*(\d{4})\)'
+        citations = re.findall(citation_pattern, self.content)
+        
+        for author, year in citations:
+            authors_cited.append(f"{author} ({year})")
+        
+        for ref in self.references:
+            author_match = re.search(r'([A-Z][a-z]+(?:\s+et\s+al\.)?)[,\s]+\(?(\d{4})\)?', ref)
+            if author_match:
+                author, year = author_match.groups()
+                authors_cited.append(f"{author} ({year})")
+        
+        return {
+            "title": self.title,
+            "author": self.author,
+            "date": self.date,
+            "authors_cited": list(set(authors_cited))
+        }
+    
+    def get_content_summary(self):
+        if self.abstract:
+            if len(self.abstract) > 200:
+                return self.abstract[:197] + "..."
+            return self.abstract
+        
+        paragraphs = re.split(r'\n\s*\n', self.content)
+        
+        for paragraph in paragraphs:
+            if ":" in paragraph or len(paragraph) < 50:
+                continue
+                
+            if len(paragraph) > 200:
+                return paragraph[:197] + "..."
+            return paragraph
+            
+        for paragraph in paragraphs:
+            if paragraph.strip():
+                if len(paragraph) > 200:
+                    return paragraph[:197] + "..."
+                return paragraph
+                
+        return "No content summary available."
+    
+    def __str__(self):
+        if self.author and self.date:
+            return f"{self.title} by {self.author} ({self.date})"
+        elif self.author:
+            return f"{self.title} by {self.author}"
+        else:
+            return self.title
+
+class DocumentAnalysisGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Plagiarism Detector")
-        self.root.geometry("700x700")  # Made taller for the additional section
+        self.root.title("Document Analysis System")
+        self.root.geometry("900x700")
         
-        # File paths
-        self.file1_path = ""
-        self.file2_path = ""
-        self.file1_content = ""
-        self.file2_content = ""
+        # Documents list
+        self.documents = []
         
         # Create UI elements
         self.create_widgets()
         
     def create_widgets(self):
-        # Frame for file selection
-        file_frame = tk.Frame(self.root, pady=10)
-        file_frame.pack(fill=tk.X)
+        # Create notebook (tabbed interface)
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Tab 1: Document Management
+        self.doc_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.doc_frame, text="Document Management")
+        
+        # Document upload section
+        upload_frame = ttk.LabelFrame(self.doc_frame, text="Upload Documents")
+        upload_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        ttk.Button(upload_frame, text="Add Documents", command=self.add_document).pack(side=tk.LEFT, padx=10, pady=10)
+        
+        # Document list section with remove button
+        list_frame = ttk.LabelFrame(self.doc_frame, text="Document List")
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Sorting options
+        sort_frame = ttk.Frame(list_frame)
+        sort_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        ttk.Label(sort_frame, text="Sort by:").pack(side=tk.LEFT, padx=5)
+        ttk.Button(sort_frame, text="Title", command=lambda: self.sort_documents("title")).pack(side=tk.LEFT, padx=5)
+        ttk.Button(sort_frame, text="Author", command=lambda: self.sort_documents("author")).pack(side=tk.LEFT, padx=5)
+        ttk.Button(sort_frame, text="Date", command=lambda: self.sort_documents("date")).pack(side=tk.LEFT, padx=5)
+        
+        # Remove button
+        ttk.Button(sort_frame, text="Remove Selected", command=self.remove_document).pack(side=tk.RIGHT, padx=5)
+        
+        # Document listbox with multiple selection enabled
+        self.doc_listbox = tk.Listbox(list_frame, height=10, selectmode=tk.MULTIPLE)
+        self.doc_listbox.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Tab 2: String Matching
+        self.match_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.match_frame, text="String Matching")
+        
+        # File selection for string matching
+        match_files_frame = ttk.LabelFrame(self.match_frame, text="Select Files to Compare")
+        match_files_frame.pack(fill=tk.X, padx=10, pady=10)
         
         # File 1 selection
-        tk.Label(file_frame, text="File 1:").grid(row=0, column=0, padx=5)
-        self.file1_entry = tk.Entry(file_frame, width=50)
-        self.file1_entry.grid(row=0, column=1, padx=5)
-        tk.Button(file_frame, text="Browse", command=self.browse_file1).grid(row=0, column=2, padx=5)
+        file1_frame = ttk.Frame(match_files_frame)
+        file1_frame.pack(fill=tk.X, padx=5, pady=5)
+        ttk.Label(file1_frame, text="File 1:").pack(side=tk.LEFT, padx=5)
+        self.file1_var = tk.StringVar()
+        self.file1_combo = ttk.Combobox(file1_frame, textvariable=self.file1_var, width=50)
+        self.file1_combo.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
         
         # File 2 selection
-        tk.Label(file_frame, text="File 2:").grid(row=1, column=0, padx=5)
-        self.file2_entry = tk.Entry(file_frame, width=50)
-        self.file2_entry.grid(row=1, column=1, padx=5)
-        tk.Button(file_frame, text="Browse", command=self.browse_file2).grid(row=1, column=2, padx=5)
+        file2_frame = ttk.Frame(match_files_frame)
+        file2_frame.pack(fill=tk.X, padx=5, pady=5)
+        ttk.Label(file2_frame, text="File 2:").pack(side=tk.LEFT, padx=5)
+        self.file2_var = tk.StringVar()
+        self.file2_combo = ttk.Combobox(file2_frame, textvariable=self.file2_var, width=50)
+        self.file2_combo.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
         
-        # Compare button
-        compare_btn = tk.Button(self.root, text="Compare Files", command=self.compare_files)
-        compare_btn.pack(pady=10)
+        # Button for string matching
+        ttk.Button(match_files_frame, text="Find Matches", 
+                command=self.find_string_matches).pack(anchor=tk.W, padx=10, pady=5)
         
-        # Results area
-        tk.Label(self.root, text="Plagiarism Results:").pack(anchor=tk.W, padx=10)
-        self.results_text = scrolledtext.ScrolledText(self.root, height=15)
-        self.results_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-        
-        # Naive Search Section
-        naive_frame = tk.Frame(self.root, pady=10)
-        naive_frame.pack(fill=tk.X)
-        
-        # Label for naive search section
-        tk.Label(naive_frame, text="Naive String Search", font=("Arial", 12, "bold")).grid(row=0, column=0, columnspan=3, pady=5)
+        # Naive search section
+        naive_frame = ttk.LabelFrame(self.match_frame, text="Naive String Search")
+        naive_frame.pack(fill=tk.X, padx=10, pady=10)
         
         # Pattern input
-        tk.Label(naive_frame, text="Pattern to search:").grid(row=1, column=0, padx=5, sticky=tk.W)
-        self.pattern_entry = tk.Entry(naive_frame, width=40)
-        self.pattern_entry.grid(row=1, column=1, padx=5)
+        pattern_frame = ttk.Frame(naive_frame)
+        pattern_frame.pack(fill=tk.X, padx=5, pady=5)
+        ttk.Label(pattern_frame, text="Pattern:").pack(side=tk.LEFT, padx=5)
+        self.pattern_entry = ttk.Entry(pattern_frame, width=50)
+        self.pattern_entry.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
         
         # File selection for naive search
-        self.file_var = tk.StringVar(value="file1")
-        tk.Radiobutton(naive_frame, text="Search in File 1", variable=self.file_var, value="file1").grid(row=2, column=0, sticky=tk.W)
-        tk.Radiobutton(naive_frame, text="Search in File 2", variable=self.file_var, value="file2").grid(row=2, column=1, sticky=tk.W)
+        self.naive_file_var = tk.StringVar(value="file1")
+        ttk.Radiobutton(naive_frame, text="Search in File 1", 
+                        variable=self.naive_file_var, value="file1").pack(anchor=tk.W, padx=10)
+        ttk.Radiobutton(naive_frame, text="Search in File 2", 
+                        variable=self.naive_file_var, value="file2").pack(anchor=tk.W, padx=10)
         
         # Naive search button
-        naive_btn = tk.Button(naive_frame, text="Search", command=self.perform_naive_search)
-        naive_btn.grid(row=3, column=0, columnspan=2, pady=10)
+        ttk.Button(naive_frame, text="Search", 
+                command=self.perform_naive_search).pack(padx=10, pady=5)
         
-        # Naive search results
-        tk.Label(self.root, text="Naive Search Results:").pack(anchor=tk.W, padx=10)
-        self.naive_results_text = scrolledtext.ScrolledText(self.root, height=10)
-        self.naive_results_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        # Results area for string matching
+        results_frame = ttk.LabelFrame(self.match_frame, text="Results")
+        results_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        self.results_text = scrolledtext.ScrolledText(results_frame, height=15)
+        self.results_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.results_text.tag_configure("highlight", background="yellow")
+        
+        # Tab 3: Citation Graph
+        self.graph_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.graph_frame, text="Citation Graph")
+        
+        # Create graph button
+        ttk.Button(self.graph_frame, text="Create Citation Graph", 
+                  command=self.create_citation_graph).pack(anchor=tk.W, padx=10, pady=10)
+        
+        # Graph display frame
+        self.graph_display_frame = ttk.LabelFrame(self.graph_frame, text="Citation Graph Visualization")
+        self.graph_display_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Stats frame
+        self.stats_frame = ttk.LabelFrame(self.graph_frame, text="Citation Statistics")
+        self.stats_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        self.stats_text = tk.Text(self.stats_frame, height=5, wrap=tk.WORD)
+        self.stats_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Tab 4: Compression
+        self.compression_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.compression_frame, text="Compression")
+        
+        # Document selection for compression
+        comp_select_frame = ttk.LabelFrame(self.compression_frame, text="Select Document")
+        comp_select_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        ttk.Label(comp_select_frame, text="Document:").pack(side=tk.LEFT, padx=5)
+        self.compression_doc_var = tk.StringVar()
+        self.compression_doc_combo = ttk.Combobox(comp_select_frame, textvariable=self.compression_doc_var, width=50)
+        self.compression_doc_combo.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
+        
+        # Compression buttons
+        comp_buttons_frame = ttk.Frame(self.compression_frame)
+        comp_buttons_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        ttk.Button(comp_buttons_frame, text="Compress", 
+                command=self.compress_document).pack(side=tk.LEFT, padx=5)
+        ttk.Button(comp_buttons_frame, text="Decompress", 
+                command=self.decompress_document).pack(side=tk.LEFT, padx=5)
+        
+        # Stats display
+        self.compression_stats_frame = ttk.LabelFrame(self.compression_frame, text="Compression Statistics")
+        self.compression_stats_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        self.compression_stats_text = tk.Text(self.compression_stats_frame, height=5, wrap=tk.WORD)
+        self.compression_stats_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Content display
+        content_frame = ttk.LabelFrame(self.compression_frame, text="Document Content")
+        content_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        content_paned = ttk.PanedWindow(content_frame, orient=tk.HORIZONTAL)
+        content_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Original content
+        original_frame = ttk.LabelFrame(content_paned, text="Original")
+        self.original_text = scrolledtext.ScrolledText(original_frame, wrap=tk.WORD)
+        self.original_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        content_paned.add(original_frame)
+        
+        # Compressed representation
+        compressed_frame = ttk.LabelFrame(content_paned, text="Compressed (Hex View)")
+        self.compressed_text = scrolledtext.ScrolledText(compressed_frame, wrap=tk.WORD)
+        self.compressed_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        content_paned.add(compressed_frame)
     
-    def browse_file1(self):
-        self.file1_path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
-        if self.file1_path:
-            self.file1_entry.delete(0, tk.END)
-            self.file1_entry.insert(0, self.file1_path)
-            self.read_file1()
+    def add_document(self):
+        file_paths = filedialog.askopenfilenames(
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+            title="Select Document(s)"
+        )
+        
+        for file_path in file_paths:
+            doc = DocumentInfo(file_path)
+            self.documents.append(doc)
+        
+        self.update_document_list()
+        self.update_file_combos()
     
-    def browse_file2(self):
-        self.file2_path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
-        if self.file2_path:
-            self.file2_entry.delete(0, tk.END)
-            self.file2_entry.insert(0, self.file2_path)
-            self.read_file2()
+    def remove_document(self):
+        selected_indices = self.doc_listbox.curselection()
+        if not selected_indices:
+            messagebox.showwarning("Warning", "Please select document(s) to remove")
+            return
+        
+        for index in sorted(selected_indices, reverse=True):
+            del self.documents[index]
+        
+        self.update_document_list()
+        self.update_file_combos()
     
-    def read_file1(self):
-        try:
-            with open(self.file1_path, 'r') as file:
-                self.file1_content = file.read()
-        except Exception as e:
-            messagebox.showerror("Error", f"Error reading file 1: {str(e)}")
+    def update_document_list(self):
+        self.doc_listbox.delete(0, tk.END)
+        for doc in self.documents:
+            self.doc_listbox.insert(tk.END, str(doc))
     
-    def read_file2(self):
-        try:
-            with open(self.file2_path, 'r') as file:
-                self.file2_content = file.read()
-        except Exception as e:
-            messagebox.showerror("Error", f"Error reading file 2: {str(e)}")
+    def update_file_combos(self):
+        doc_titles = [doc.title for doc in self.documents]
+        
+        # Update string matching combos
+        self.file1_combo['values'] = doc_titles
+        self.file2_combo['values'] = doc_titles
+        
+        # Update compression combo
+        self.compression_doc_combo['values'] = doc_titles
+        
+        # Set defaults if documents are available
+        if doc_titles:
+            self.file1_combo.current(0)
+            self.compression_doc_combo.current(0)
+            if len(doc_titles) > 1:
+                self.file2_combo.current(1)
+            else:
+                self.file2_combo.current(0)
     
-    def compare_files(self):
-        if not self.file1_content or not self.file2_content:
+    def sort_documents(self, sort_key):
+        if not self.documents:
+            return
+        
+        temp_docs = []
+        for i, doc in enumerate(self.documents):
+            temp_docs.append([doc.title, doc.author, doc.date, i])
+        
+        sort_index = 0  # title
+        if sort_key == "author":
+            sort_index = 1
+        elif sort_key == "date":
+            sort_index = 2
+        
+        merge_sort(temp_docs, sort_index)
+        
+        sorted_docs = []
+        for item in temp_docs:
+            original_index = item[3]
+            sorted_docs.append(self.documents[original_index])
+        
+        self.documents = sorted_docs
+        self.update_document_list()
+    
+    def find_string_matches(self):
+        file1_title = self.file1_var.get()
+        file2_title = self.file2_var.get()
+        
+        if not file1_title or not file2_title:
             messagebox.showwarning("Warning", "Please select two files to compare")
             return
         
-        # Clear previous results
+        file1_content = None
+        file2_content = None
+        file1_doc = None
+        file2_doc = None
+        
+        for doc in self.documents:
+            if doc.title == file1_title:
+                file1_content = doc.content
+                file1_doc = doc
+            if doc.title == file2_title:
+                file2_content = doc.content
+                file2_doc = doc
+        
+        if not file1_content or not file2_content:
+            messagebox.showwarning("Warning", "Could not read one or both selected files")
+            return
+        
         self.results_text.delete(1.0, tk.END)
+        self.results_text.insert(tk.END, "Analyzing documents for plagiarism...\n")
+        self.results_text.update()
         
-        # Find matches between the two files
-        matches = find_matches(self.file1_content, self.file2_content)
+        matches = find_matches(file1_content, file2_content)
         
-        # Display results
-        self.results_text.insert(tk.END, "Plagiarism Detection Results:\n\n")
+        self.results_text.delete(1.0, tk.END)
+        self.results_text.insert(tk.END, "📊 Plagiarism Detection Results\n\n", "title")
         
-        if not any(matches.values()):
-            self.results_text.insert(tk.END, "No matching phrases found between the files.\n")
+        self.results_text.insert(tk.END, "📄 Document Summary\n", "section")
+        self.results_text.insert(tk.END, f"Document 1: {file1_doc.title}\n")
+        if file1_doc.author:
+            self.results_text.insert(tk.END, f"Author: {file1_doc.author}\n")
+        
+        self.results_text.insert(tk.END, f"\nDocument 2: {file2_doc.title}\n")
+        if file2_doc.author:
+            self.results_text.insert(tk.END, f"Author: {file2_doc.author}\n")
+        
+        similarity = matches.get("similarity_percentage", 0)
+        self.results_text.insert(tk.END, f"\n🔍 Similarity Analysis\n", "section")
+        
+        bar_length = 20
+        filled_bars = int((similarity / 100) * bar_length)
+        similarity_display = "█" * filled_bars + "░" * (bar_length - filled_bars)
+        
+        self.results_text.insert(tk.END, f"Similarity Score: {similarity:.2f}%\n")
+        self.results_text.insert(tk.END, f"{similarity_display}\n")
+        
+        if similarity > 75:
+            self.results_text.insert(tk.END, "⚠️ Very high similarity detected! Significant plagiarism likely.\n", "alert")
+        elif similarity > 50:
+            self.results_text.insert(tk.END, "⚠️ High similarity detected. Substantial plagiarism likely.\n", "alert")
+        elif similarity > 25:
+            self.results_text.insert(tk.END, "⚠️ Moderate similarity detected. Some plagiarism possible.\n", "moderate")
+        elif similarity > 10:
+            self.results_text.insert(tk.END, "ℹ️ Low similarity detected. May involve common phrases only.\n", "info")
         else:
-            total_matches = sum(len(m) for m in matches.values())
-            self.results_text.insert(tk.END, f"Found {total_matches} total matches across all algorithms.\n\n")
-            
-            # Display matches for each algorithm
-            for algo, algo_matches in matches.items():
-                if algo_matches:
-                    self.results_text.insert(tk.END, f"\n{algo} ({len(algo_matches)} matches):\n")
-                    for i, (phrase, positions) in enumerate(algo_matches, 1):
-                        self.results_text.insert(tk.END, f"{i}. \"{phrase}\" found at positions: {positions}\n")
+            self.results_text.insert(tk.END, "✓ Minimal similarity. Documents appear to be distinct.\n", "good")
+        
+        # Style configuration
+        self.results_text.tag_configure("title", font=("TkDefaultFont", 12, "bold"))
+        self.results_text.tag_configure("section", font=("TkDefaultFont", 10, "bold"))
+        self.results_text.tag_configure("alert", foreground="red")
+        self.results_text.tag_configure("moderate", foreground="orange")
+        self.results_text.tag_configure("info", foreground="blue")
+        self.results_text.tag_configure("good", foreground="green")
     
     def perform_naive_search(self):
         pattern = self.pattern_entry.get().strip()
@@ -131,53 +542,239 @@ class PlagiarismDetectorGUI:
             messagebox.showwarning("Warning", "Please enter a pattern to search for")
             return
         
-        # Determine which file to search in
-        if self.file_var.get() == "file1":
-            if not self.file1_content:
-                messagebox.showwarning("Warning", "Please select File 1 first")
-                return
-            content = self.file1_content
-            file_name = self.file1_path.split("/")[-1]
-        else:
-            if not self.file2_content:
-                messagebox.showwarning("Warning", "Please select File 2 first")
-                return
-            content = self.file2_content
-            file_name = self.file2_path.split("/")[-1]
+        file_var = self.naive_file_var.get()
+        file_title = self.file1_var.get() if file_var == "file1" else self.file2_var.get()
         
-        # Clear previous results
-        self.naive_results_text.delete(1.0, tk.END)
+        file_content = None
+        for doc in self.documents:
+            if doc.title == file_title:
+                file_content = doc.content
+                break
         
-        # Perform naive search
-        positions = naive_search(content, pattern)
+        if not file_content:
+            messagebox.showwarning("Warning", f"Please select a valid file for {file_var}")
+            return
         
-        # Display results
-        self.naive_results_text.insert(tk.END, f"Naive Search Results for pattern \"{pattern}\" in {file_name}:\n\n")
+        self.results_text.delete(1.0, tk.END)
+        
+        positions = naive_search(file_content, pattern)
+        
+        self.results_text.insert(tk.END, f"Naive Search Results for pattern \"{pattern}\" in {file_title}:\n\n")
         
         if not positions:
-            self.naive_results_text.insert(tk.END, "No matches found.\n")
+            self.results_text.insert(tk.END, "No matches found.\n")
         else:
-            self.naive_results_text.insert(tk.END, f"Found {len(positions)} matches at positions: {positions}\n")
+            self.results_text.insert(tk.END, f"Found {len(positions)} matches at positions: {positions}\n")
             
-            # Show context for each match (optional)
             for i, pos in enumerate(positions, 1):
                 start = max(0, pos - 20)
-                end = min(len(content), pos + len(pattern) + 20)
-                context = content[start:end].replace('\n', ' ')
+                end = min(len(file_content), pos + len(pattern) + 20)
                 
-                # Highlight the matched pattern
-                pre_context = content[start:pos].replace('\n', ' ')
-                highlight = content[pos:pos+len(pattern)].replace('\n', ' ')
-                post_context = content[pos+len(pattern):end].replace('\n', ' ')
+                pre_context = file_content[start:pos].replace('\n', ' ')
+                highlight = file_content[pos:pos+len(pattern)].replace('\n', ' ')
+                post_context = file_content[pos+len(pattern):end].replace('\n', ' ')
                 
-                self.naive_results_text.insert(tk.END, f"\n{i}. ...{pre_context}")
-                self.naive_results_text.insert(tk.END, f"{highlight}", "highlight")
-                self.naive_results_text.insert(tk.END, f"{post_context}...\n")
+                self.results_text.insert(tk.END, f"\n{i}. ...{pre_context}")
+                self.results_text.insert(tk.END, f"{highlight}", "highlight")
+                self.results_text.insert(tk.END, f"{post_context}...\n")
+    
+    def create_citation_graph(self):
+        if len(self.documents) < 2:
+            messagebox.showwarning("Warning", "Please add at least two documents to create a citation graph")
+            return
+        
+        for widget in self.graph_display_frame.winfo_children():
+            widget.destroy()
+        
+        citation_graph = self._build_citation_graph()
+        
+        fig, ax = plt.subplots(figsize=(8, 6))
+        
+        graph_frame = ttk.Frame(self.graph_display_frame)
+        graph_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        canvas = FigureCanvasTkAgg(fig, master=graph_frame)
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        
+        G = nx.DiGraph(citation_graph)
+        pos = nx.spring_layout(G, seed=42)
+        
+        nx.draw_networkx_nodes(G, pos, node_size=800, node_color='lightblue', ax=ax)
+        nx.draw_networkx_edges(G, pos, width=1.0, edge_color='gray', arrowsize=15, ax=ax)
+        
+        labels = {}
+        for node in G.nodes():
+            if len(node) > 20:
+                labels[node] = node[:17] + "..."
+            else:
+                labels[node] = node
+                
+        nx.draw_networkx_labels(G, pos, labels=labels, font_size=9, font_weight='bold', ax=ax)
+        
+        ax.set_title("Citation Network")
+        ax.axis('off')
+        
+        canvas.draw()
+        
+        self.update_graph_stats(G)
+    
+    def _build_citation_graph(self):
+        citation_graph = {}
+        
+        for doc in self.documents:
+            citation_graph[doc.title] = []
+        
+        for doc in self.documents:
+            citation_info = doc.get_citation_info()
+            authors_cited = citation_info.get("authors_cited", [])
             
-            # Configure tag for highlighting
-            self.naive_results_text.tag_configure("highlight", background="yellow")
+            for cited_author in authors_cited:
+                for target_doc in self.documents:
+                    if target_doc.author and cited_author and target_doc.author in cited_author:
+                        if target_doc.title not in citation_graph[doc.title] and target_doc.title != doc.title:
+                            citation_graph[doc.title].append(target_doc.title)
+            
+            for ref in doc.references:
+                for target_doc in self.documents:
+                    if target_doc.title in citation_graph[doc.title] or target_doc.title == doc.title:
+                        continue
+                        
+                    if target_doc.author and target_doc.author in ref:
+                        citation_graph[doc.title].append(target_doc.title)
+                        break
+                        
+                    if target_doc.title and any(word in ref.lower() for word in target_doc.title.lower().split()):
+                        citation_graph[doc.title].append(target_doc.title)
+                        break
+        
+        return citation_graph
+    
+    def update_graph_stats(self, graph):
+        self.stats_text.delete(1.0, tk.END)
+        
+        num_nodes = graph.number_of_nodes()
+        num_edges = graph.number_of_edges()
+        
+        if num_nodes == 0:
+            self.stats_text.insert(tk.END, "No documents in the citation graph.")
+            return
+        
+        stats = f"Basic Statistics:\n"
+        stats += f"• Number of documents: {num_nodes}\n"
+        stats += f"• Number of citations: {num_edges}\n"
+        
+        if num_nodes > 1:
+            max_possible_edges = num_nodes * (num_nodes - 1)
+            density = (num_edges / max_possible_edges) * 100 if max_possible_edges > 0 else 0
+            stats += f"• Network density: {density:.2f}%\n"
+        
+        self.stats_text.insert(tk.END, stats)
+    
+    def compress_document(self):
+        doc_title = self.compression_doc_var.get()
+        if not doc_title:
+            messagebox.showwarning("Warning", "Please select a document to compress")
+            return
+        
+        selected_doc = None
+        for doc in self.documents:
+            if doc.title == doc_title:
+                selected_doc = doc
+                break
+        
+        if not selected_doc:
+            messagebox.showwarning("Warning", "Could not find the selected document")
+            return
+        
+        self.compression_stats_text.delete(1.0, tk.END)
+        self.original_text.delete(1.0, tk.END)
+        self.compressed_text.delete(1.0, tk.END)
+        
+        self.original_text.insert(tk.END, selected_doc.content)
+        
+        try:
+            from Huffman import Huffman
+            huffman = Huffman()
+            
+            compressed_data = huffman.compress_text(selected_doc.content)
+            
+            selected_doc.compressed_data = compressed_data
+            selected_doc.huffman_instance = huffman
+            
+            compressed_hex = ' '.join(f'{b:02X}' for b in compressed_data)
+            self.compressed_text.insert(tk.END, compressed_hex)
+            
+            stats = huffman.get_compression_stats()
+            
+            self._display_compression_stats(stats, selected_doc.content)
+            
+        except Exception as e:
+            messagebox.showerror("Compression Error", f"Error during compression: {str(e)}")
+            self.compression_stats_text.insert(tk.END, f"Error: {str(e)}")
+    
+    def _display_compression_stats(self, stats, content):
+        self.compression_stats_text.delete(1.0, tk.END)
+        
+        self.compression_stats_text.insert(tk.END, "Compression Results:\n\n")
+        
+        original_bytes = stats["original_size"]
+        self.compression_stats_text.insert(tk.END, f"Original size: {original_bytes:,} bytes\n")
+        
+        compressed_bytes = stats["compressed_size"]
+        self.compression_stats_text.insert(tk.END, f"Compressed size: {compressed_bytes:,} bytes\n")
+        
+        compression_ratio = stats["compression_ratio"]
+        space_saving = stats["space_saving"]
+        
+        indicator = "Minimal ⚠️"
+        if space_saving > 75:
+            indicator = "Excellent! 🌟"
+        elif space_saving > 50:
+            indicator = "Very good! ✓"
+        elif space_saving > 25:
+            indicator = "Good ✓"
+        
+        self.compression_stats_text.insert(tk.END, f"Compression ratio: {compression_ratio:.2f}x {indicator}\n")
+        self.compression_stats_text.insert(tk.END, f"Space saved: {space_saving:.2f}%\n")
+    
+    def decompress_document(self):
+        doc_title = self.compression_doc_var.get()
+        if not doc_title:
+            messagebox.showwarning("Warning", "Please select a document to decompress")
+            return
+        
+        selected_doc = None
+        for doc in self.documents:
+            if doc.title == doc_title:
+                selected_doc = doc
+                break
+        
+        if not selected_doc:
+            messagebox.showwarning("Warning", "Could not find the selected document")
+            return
+        
+        if not hasattr(selected_doc, 'compressed_data') or not hasattr(selected_doc, 'huffman_instance'):
+            messagebox.showwarning("Warning", "Please compress the document first")
+            return
+        
+        try:
+            huffman = selected_doc.huffman_instance
+            
+            decompressed_text = huffman.decompress_data(selected_doc.compressed_data)
+            
+            self.original_text.delete(1.0, tk.END)
+            self.original_text.insert(tk.END, decompressed_text)
+            
+            if decompressed_text == selected_doc.content:
+                self.compression_stats_text.insert(tk.END, "\n\nVerification: Decompression successful! ✓")
+            else:
+                self.compression_stats_text.insert(tk.END, "\n\nWarning: Decompressed data differs from original! ⚠️")
+            
+        except Exception as e:
+            messagebox.showerror("Decompression Error", f"Error during decompression: {str(e)}")
+            self.compression_stats_text.insert(tk.END, f"\n\nError: {str(e)}")
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = PlagiarismDetectorGUI(root)
+    app = DocumentAnalysisGUI(root)
     root.mainloop()
