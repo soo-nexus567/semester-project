@@ -8,7 +8,7 @@ import os
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-#changed mergesort capitalization
+#changed mergesort capitalizationh
 class DocumentInfo:
     """A class for storing and extracting document information and metadata."""
     def __init__(self, path):
