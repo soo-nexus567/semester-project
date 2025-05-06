@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import filedialog, scrolledtext, messagebox, ttk
 from person2 import find_matches
 from naive import naive_search
-from mergeSort import merge_sort
+from Mergesort import merge_sort
 import re
 import os
 import networkx as nx
@@ -320,9 +320,34 @@ class DocumentAnalysisGUI:
         results_frame = ttk.LabelFrame(self.match_frame, text="Results")
         results_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        self.results_text = scrolledtext.ScrolledText(results_frame, height=15)
-        self.results_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        # Create a summary section
+        self.results_text = scrolledtext.ScrolledText(results_frame, height=7)
+        self.results_text.pack(fill=tk.X, expand=False, padx=5, pady=5)
         self.results_text.tag_configure("highlight", background="yellow")
+        self.results_text.tag_configure("title", font=("TkDefaultFont", 12, "bold"))
+        self.results_text.tag_configure("section", font=("TkDefaultFont", 10, "bold"))
+        self.results_text.tag_configure("alert", foreground="red")
+        self.results_text.tag_configure("moderate", foreground="orange")
+        self.results_text.tag_configure("info", foreground="blue")
+        self.results_text.tag_configure("good", foreground="green")
+        
+        # Create a paned window for document display
+        doc_paned = ttk.PanedWindow(results_frame, orient=tk.HORIZONTAL)
+        doc_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Document 1 display
+        doc1_frame = ttk.LabelFrame(doc_paned, text="Document 1")
+        self.doc1_text = scrolledtext.ScrolledText(doc1_frame, wrap=tk.WORD)
+        self.doc1_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.doc1_text.tag_configure("highlight", background="yellow")
+        doc_paned.add(doc1_frame)
+        
+        # Document 2 display
+        doc2_frame = ttk.LabelFrame(doc_paned, text="Document 2")
+        self.doc2_text = scrolledtext.ScrolledText(doc2_frame, wrap=tk.WORD)
+        self.doc2_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.doc2_text.tag_configure("highlight", background="yellow")
+        doc_paned.add(doc2_frame)
         
         # Tab 3: Citation Graph
         self.graph_frame = ttk.Frame(self.notebook)
@@ -364,6 +389,8 @@ class DocumentAnalysisGUI:
                 command=self.compress_document).pack(side=tk.LEFT, padx=5)
         ttk.Button(comp_buttons_frame, text="Decompress", 
                 command=self.decompress_document).pack(side=tk.LEFT, padx=5)
+        ttk.Button(comp_buttons_frame, text="Save Compressed File", 
+                command=self.save_compressed_file).pack(side=tk.LEFT, padx=5)
         
         # Stats display
         self.compression_stats_frame = ttk.LabelFrame(self.compression_frame, text="Compression Statistics")
@@ -376,20 +403,9 @@ class DocumentAnalysisGUI:
         content_frame = ttk.LabelFrame(self.compression_frame, text="Document Content")
         content_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        content_paned = ttk.PanedWindow(content_frame, orient=tk.HORIZONTAL)
-        content_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-        # Original content
-        original_frame = ttk.LabelFrame(content_paned, text="Original")
-        self.original_text = scrolledtext.ScrolledText(original_frame, wrap=tk.WORD)
+        # Text content
+        self.original_text = scrolledtext.ScrolledText(content_frame, wrap=tk.WORD)
         self.original_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        content_paned.add(original_frame)
-        
-        # Compressed representation
-        compressed_frame = ttk.LabelFrame(content_paned, text="Compressed (Hex View)")
-        self.compressed_text = scrolledtext.ScrolledText(compressed_frame, wrap=tk.WORD)
-        self.compressed_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        content_paned.add(compressed_frame)
     
     def add_document(self):
         file_paths = filedialog.askopenfilenames(
@@ -441,28 +457,48 @@ class DocumentAnalysisGUI:
                 self.file2_combo.current(0)
     
     def sort_documents(self, sort_key):
+        """
+        Sort documents by title, author, or date using merge sort.
+        
+        Args:
+            sort_key (str): Key to sort by ('title', 'author', or 'date')
+        """
         if not self.documents:
             return
         
-        temp_docs = []
+        # Create a list of document metadata for sorting
+        docs_with_metadata = []
         for i, doc in enumerate(self.documents):
-            temp_docs.append([doc.title, doc.author, doc.date, i])
+            # Store document and its metadata as [title, author, date, original_index]
+            docs_with_metadata.append([
+                doc.title if doc.title else "",
+                doc.author if doc.author else "",
+                doc.date if doc.date else "",
+                i  # Store original index
+            ])
         
-        sort_index = 0  # title
+        # Determine sort index based on key
+        sort_index = 0  # title (default)
         if sort_key == "author":
             sort_index = 1
         elif sort_key == "date":
             sort_index = 2
         
-        merge_sort(temp_docs, sort_index)
+        # Sort using our merge sort implementation
+        merge_sort(docs_with_metadata, sort_index)
         
+        # Reconstruct sorted document list
         sorted_docs = []
-        for item in temp_docs:
+        for item in docs_with_metadata:
             original_index = item[3]
             sorted_docs.append(self.documents[original_index])
         
+        # Update document list
         self.documents = sorted_docs
         self.update_document_list()
+        
+        # Show sorting feedback
+        messagebox.showinfo("Sorting Complete", f"Documents sorted by {sort_key}")
     
     def find_string_matches(self):
         file1_title = self.file1_var.get()
@@ -489,12 +525,19 @@ class DocumentAnalysisGUI:
             messagebox.showwarning("Warning", "Could not read one or both selected files")
             return
         
+        # Clear all text displays
         self.results_text.delete(1.0, tk.END)
+        self.doc1_text.delete(1.0, tk.END)
+        self.doc2_text.delete(1.0, tk.END)
+        
+        # Show loading message
         self.results_text.insert(tk.END, "Analyzing documents for plagiarism...\n")
         self.results_text.update()
         
+        # Get matches using the person2.py functionality
         matches = find_matches(file1_content, file2_content)
         
+        # Display summary results
         self.results_text.delete(1.0, tk.END)
         self.results_text.insert(tk.END, "📊 Plagiarism Detection Results\n\n", "title")
         
@@ -527,14 +570,72 @@ class DocumentAnalysisGUI:
             self.results_text.insert(tk.END, "ℹ️ Low similarity detected. May involve common phrases only.\n", "info")
         else:
             self.results_text.insert(tk.END, "✓ Minimal similarity. Documents appear to be distinct.\n", "good")
+            
+        # Display document contents
+        self.doc1_text.insert(tk.END, file1_content)
+        self.doc2_text.insert(tk.END, file2_content)
         
-        # Style configuration
-        self.results_text.tag_configure("title", font=("TkDefaultFont", 12, "bold"))
-        self.results_text.tag_configure("section", font=("TkDefaultFont", 10, "bold"))
-        self.results_text.tag_configure("alert", foreground="red")
-        self.results_text.tag_configure("moderate", foreground="orange")
-        self.results_text.tag_configure("info", foreground="blue")
-        self.results_text.tag_configure("good", foreground="green")
+        # Get the matched phrases for highlighting
+        matched_phrases = matches.get("unique_matches", [])
+        
+        # Highlight matched phrases in both documents
+        self.highlight_matched_content(file1_content, file2_content, matched_phrases)
+    
+    def highlight_matched_content(self, doc1_content, doc2_content, matched_phrases):
+        """
+        Highlight matching phrases in both document displays.
+        
+        Args:
+            doc1_content (str): Content of first document
+            doc2_content (str): Content of second document
+            matched_phrases (list): List of matched phrases to highlight
+        """
+        from person2 import highlight_matched_phrases
+        
+        # Process each document
+        for phrase in matched_phrases:
+            # Find all instances of phrase in document 1
+            doc1_indices = self.find_phrase_indices(doc1_content.lower(), phrase.lower())
+            for start_idx in doc1_indices:
+                end_idx = start_idx + len(phrase)
+                # Convert to tkinter text widget indices
+                start = f"1.0+{start_idx}c"
+                end = f"1.0+{end_idx}c"
+                # Add the highlight tag
+                self.doc1_text.tag_add("highlight", start, end)
+            
+            # Find all instances of phrase in document 2
+            doc2_indices = self.find_phrase_indices(doc2_content.lower(), phrase.lower())
+            for start_idx in doc2_indices:
+                end_idx = start_idx + len(phrase)
+                # Convert to tkinter text widget indices
+                start = f"1.0+{start_idx}c"
+                end = f"1.0+{end_idx}c"
+                # Add the highlight tag
+                self.doc2_text.tag_add("highlight", start, end)
+    
+    def find_phrase_indices(self, text, phrase):
+        """
+        Find all occurrences of a phrase in text.
+        
+        Args:
+            text (str): Text to search in
+            phrase (str): Phrase to find
+            
+        Returns:
+            list: List of indices where the phrase starts
+        """
+        indices = []
+        start_idx = 0
+        
+        while True:
+            idx = text.find(phrase, start_idx)
+            if idx == -1:
+                break
+            indices.append(idx)
+            start_idx = idx + 1
+            
+        return indices
     
     def perform_naive_search(self):
         pattern = self.pattern_entry.get().strip()
@@ -671,6 +772,9 @@ class DocumentAnalysisGUI:
         self.stats_text.insert(tk.END, stats)
     
     def compress_document(self):
+        """
+        Compress the selected document using Huffman coding.
+        """
         doc_title = self.compression_doc_var.get()
         if not doc_title:
             messagebox.showwarning("Warning", "Please select a document to compress")
@@ -686,36 +790,47 @@ class DocumentAnalysisGUI:
             messagebox.showwarning("Warning", "Could not find the selected document")
             return
         
+        # Clear existing content
         self.compression_stats_text.delete(1.0, tk.END)
         self.original_text.delete(1.0, tk.END)
-        self.compressed_text.delete(1.0, tk.END)
         
+        # Show original content
         self.original_text.insert(tk.END, selected_doc.content)
         
         try:
+            # Use our simplified Huffman implementation
             from Huffman import Huffman
             huffman = Huffman()
             
+            # Compress the document content
             compressed_data = huffman.compress_text(selected_doc.content)
             
+            # Store compressed data with the document
             selected_doc.compressed_data = compressed_data
             selected_doc.huffman_instance = huffman
             
-            compressed_hex = ' '.join(f'{b:02X}' for b in compressed_data)
-            self.compressed_text.insert(tk.END, compressed_hex)
-            
+            # Get and display compression statistics
             stats = huffman.get_compression_stats()
+            self._display_compression_stats(stats)
             
-            self._display_compression_stats(stats, selected_doc.content)
+            # Show success message
+            messagebox.showinfo("Compression Complete", 
+                               f"Document compressed! Size reduced from {stats['original_size']:,} bytes to {stats['compressed_size']:,} bytes.")
             
         except Exception as e:
             messagebox.showerror("Compression Error", f"Error during compression: {str(e)}")
             self.compression_stats_text.insert(tk.END, f"Error: {str(e)}")
     
-    def _display_compression_stats(self, stats, content):
+    def _display_compression_stats(self, stats):
+        """
+        Display compression statistics in the stats text area.
+        
+        Args:
+            stats (dict): Compression statistics from Huffman.get_compression_stats()
+        """
         self.compression_stats_text.delete(1.0, tk.END)
         
-        self.compression_stats_text.insert(tk.END, "Compression Results:\n\n")
+        self.compression_stats_text.insert(tk.END, "📊 Compression Results\n\n", "title")
         
         original_bytes = stats["original_size"]
         self.compression_stats_text.insert(tk.END, f"Original size: {original_bytes:,} bytes\n")
@@ -726,6 +841,7 @@ class DocumentAnalysisGUI:
         compression_ratio = stats["compression_ratio"]
         space_saving = stats["space_saving"]
         
+        # Determine the compression quality indicator
         indicator = "Minimal ⚠️"
         if space_saving > 75:
             indicator = "Excellent! 🌟"
@@ -734,10 +850,24 @@ class DocumentAnalysisGUI:
         elif space_saving > 25:
             indicator = "Good ✓"
         
+        # Display the compression ratio and space saving
         self.compression_stats_text.insert(tk.END, f"Compression ratio: {compression_ratio:.2f}x {indicator}\n")
         self.compression_stats_text.insert(tk.END, f"Space saved: {space_saving:.2f}%\n")
+        
+        # Add a visual bar to show compression ratio
+        if original_bytes > 0:
+            bar_length = 20
+            filled_bars = int((compressed_bytes / original_bytes) * bar_length)
+            compression_display = "█" * filled_bars + "░" * (bar_length - filled_bars)
+            self.compression_stats_text.insert(tk.END, f"\nCompression visualization: \n{compression_display}\n")
+        
+        # Configure text tags
+        self.compression_stats_text.tag_configure("title", font=("TkDefaultFont", 12, "bold"))
     
     def decompress_document(self):
+        """
+        Decompress the selected document using Huffman coding.
+        """
         doc_title = self.compression_doc_var.get()
         if not doc_title:
             messagebox.showwarning("Warning", "Please select a document to decompress")
@@ -758,21 +888,70 @@ class DocumentAnalysisGUI:
             return
         
         try:
+            # Get the Huffman instance stored with the document
             huffman = selected_doc.huffman_instance
             
+            # Decompress the data
             decompressed_text = huffman.decompress_data(selected_doc.compressed_data)
             
+            # Display the decompressed text
             self.original_text.delete(1.0, tk.END)
             self.original_text.insert(tk.END, decompressed_text)
             
+            # Verify the decompression
             if decompressed_text == selected_doc.content:
-                self.compression_stats_text.insert(tk.END, "\n\nVerification: Decompression successful! ✓")
+                self.compression_stats_text.insert(tk.END, "\n✅ Verification: Decompression successful!\n")
+                self.compression_stats_text.insert(tk.END, "The decompressed text matches the original document.")
             else:
-                self.compression_stats_text.insert(tk.END, "\n\nWarning: Decompressed data differs from original! ⚠️")
+                self.compression_stats_text.insert(tk.END, "\n⚠️ Warning: Decompressed data differs from original!\n")
+                self.compression_stats_text.insert(tk.END, "There may be issues with the compression/decompression process.")
             
         except Exception as e:
             messagebox.showerror("Decompression Error", f"Error during decompression: {str(e)}")
             self.compression_stats_text.insert(tk.END, f"\n\nError: {str(e)}")
+    
+    def save_compressed_file(self):
+        """
+        Save the compressed data to a file.
+        """
+        doc_title = self.compression_doc_var.get()
+        if not doc_title:
+            messagebox.showwarning("Warning", "Please select a document to save")
+            return
+        
+        selected_doc = None
+        for doc in self.documents:
+            if doc.title == doc_title:
+                selected_doc = doc
+                break
+        
+        if not selected_doc:
+            messagebox.showwarning("Warning", "Could not find the selected document")
+            return
+        
+        if not hasattr(selected_doc, 'compressed_data'):
+            messagebox.showwarning("Warning", "Please compress the document first")
+            return
+        
+        # Show save file dialog
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".bin",
+            filetypes=[("Binary files", "*.bin"), ("All files", "*.*")],
+            initialfile=f"{selected_doc.title.replace(' ', '_')}_compressed.bin"
+        )
+        
+        if not file_path:
+            return  # User canceled the dialog
+        
+        try:
+            # Write compressed data to file
+            with open(file_path, "wb") as file:
+                file.write(selected_doc.compressed_data)
+            
+            messagebox.showinfo("Save Successful", f"Compressed file saved to {file_path}")
+            
+        except Exception as e:
+            messagebox.showerror("Save Error", f"Error saving file: {str(e)}")
 
 if __name__ == "__main__":
     root = tk.Tk()

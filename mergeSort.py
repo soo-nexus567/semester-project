@@ -1,48 +1,81 @@
-#flights would be a dictionary with key value pairs for author,
-def merge_sort(flights, sortOption):
-    if len(flights) > 1:
-        mid = len(flights) // 2 # Find the middle index
-        left_half = flights[:mid] #Divide list into halves
-        right_half = flights[mid:]
-        merge_sort(left_half, sortOption)
-        merge_sort(right_half, sortOption)
-        i = j = k = 0
-        while i < len(left_half) and j < len(right_half):  
-            if (isinstance(flights[0][sortOption], int) == False):
-                if len(left_half[i][sortOption]) == len(right_half[j][sortOption]) and left_half[i][1][sortOption] < right_half[j][1][sortOption]:                
-                        # if left_half[i][1][1] < right_half[j][1][1]:
-                    flights[k] = left_half[i]
-                    i += 1
-                else:
-                    flights[k] = right_half[j]
-                    j += 1
-                k += 1
+import random
+import time
+
+# Merge sort algorithm that can sort by a key
+def merge_sort(arr, key_index=None):
+    """
+    Sort the array using merge sort algorithm.
+    
+    Args:
+        arr: List to be sorted
+        key_index: Optional index for sorting lists of lists/tuples by a specific element
+                   If None, sorts the elements directly
+    """
+    if len(arr) <= 1:
+        return arr
+        
+    mid = len(arr) // 2
+    left_half = arr[:mid]
+    right_half = arr[mid:]
+    
+    # Recursively apply merge sort on both halves
+    merge_sort(left_half, key_index)
+    merge_sort(right_half, key_index)
+    
+    # Merge the two sorted halves
+    i = j = k = 0
+    while i < len(left_half) and j < len(right_half):
+        # Compare by key index if provided
+        if key_index is not None:
+            left_val = left_half[i][key_index] if left_half[i][key_index] is not None else ""
+            right_val = right_half[j][key_index] if right_half[j][key_index] is not None else ""
+            if str(left_val).lower() <= str(right_val).lower():
+                arr[k] = left_half[i]
+                i += 1
             else:
-                if left_half[i][sortOption] < right_half[j][sortOption]:
-                    flights[k] = left_half[i]
-                    i += 1
-                else:
-                    flights[k] = right_half[j]
-                    j += 1
-                k += 1
-        while i < len(left_half):
-            flights[k] = left_half[i]
-            i += 1
-            k += 1
-        while j < len(right_half):
-            flights[k] = right_half[j]
-            j += 1
-            k += 1
+                arr[k] = right_half[j]
+                j += 1
+        else:
+            # Direct comparison
+            if left_half[i] <= right_half[j]:
+                arr[k] = left_half[i]
+                i += 1
+            else:
+                arr[k] = right_half[j]
+                j += 1
+        k += 1
+    
+    # Add remaining elements from left_half
+    while i < len(left_half):
+        arr[k] = left_half[i]
+        i += 1
+        k += 1
+    
+    # Add remaining elements from right_half
+    while j < len(right_half):
+        arr[k] = right_half[j]
+        j += 1
+        k += 1
+    
+    return arr
 
-books = [
-    ["To Kill a Mockingbird", "Harper Lee", 1960],
-    ["1984", "George Orwell", 1949],
-    ["Pride and Prejudice", "Jane Austen", 1813],
-    ["The Great Gatsby", "F. Scott Fitzgerald", 1925],
-    ["Moby Dick", "Herman Melville", 1851]
-]
-
-merge_sort(books, 2)
-print(books)
-print()
-print(sorted(books, key=lambda x: x[0]))
+# Test the merge sort implementation when run directly
+if __name__ == "__main__":
+    # User input to generate random numbers
+    num_elements = int(input("Enter the number of elements to be generated in the array: "))
+    
+    # Generate a list of random integers between 1 and 100
+    arr = [random.randint(1, 100) for _ in range(num_elements)]
+    print(f"\nGenerated random array: {arr}")
+    
+    user_response = input("\nDo you want to run Merge sort now? (yes/no): ").strip().lower()
+    
+    if user_response == 'yes':
+        # Measure execution time for merge sort
+        start_time = time.time()
+        merge_sort(arr)
+        end_time = time.time()
+        
+        # Display the results
+        print(f"\nSorted array: {arr}")
+        print(f"Execution time: {end_time - start_time:.6f} seconds")
