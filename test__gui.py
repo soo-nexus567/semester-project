@@ -665,7 +665,8 @@ class DocumentAnalysisGUI:
         # Use our simplified Huffman implementation
         from huffmancopy import Huffman
         huffman = Huffman()
-        huffman.open_file(doc_title)
+        #huffman.open_file(doc_title)
+        huffman.open_file(selected_doc.path)
         output = huffman.decode_bin_file()
         # # Compress the document content
         compressed_data = output
