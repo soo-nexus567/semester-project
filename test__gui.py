@@ -456,8 +456,6 @@ class DocumentAnalysisGUI:
             doc2_content (str): Content of second document
             matched_phrases (list): List of matched phrases to highlight
         """
-        from person2 import highlight_matched_phrases
-        
         # Process each document
         for phrase in matched_phrases:
             # Find all instances of phrase in document 1

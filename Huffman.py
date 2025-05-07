@@ -1,182 +1,156 @@
 import heapq
 from collections import defaultdict
 import os
-
+# Function to perform Huffman Coding
 class Huffman:
-    """
-    A class to perform Huffman coding compression and decompression.
-    """
     def __init__(self):
-        self.original_size = 0
-        self.compressed_size = 0
-        self.huffman_codes = {}
-        self.reverse_codes = {}
-    
-    def compress_text(self, text):
-        """
-        Compress the given text using Huffman coding.
-        
-        Args:
-            text (str): The text to compress
-            
-        Returns:
-            bytes: The compressed data as bytes
-        """
-        # Reset counters
-        self.original_size = len(text.encode('utf-8'))
-        self.compressed_size = 0
-        
-        # Build frequency table
+        self.original = 0
+        self.compressed_byte = 0
+        self.reverse_huff_codes = ""
+        self.decoded_text = ""
+        self.file_path = "input.txt"
+        self.text_area = ""
+    def huffman_coding(self, text):
+        # Calculate frequency of each character
+
         frequency = defaultdict(int)
         for char in text:
+            self.original += 1
             frequency[char] += 1
-        
-        # Create Huffman codes
-        self.huffman_codes = self._build_huffman_tree(frequency)
-        self.reverse_codes = {v: k for k, v in self.huffman_codes.items()}
-        
-        # Encode the text
-        encoded_text = ''.join(self.huffman_codes[char] for char in text)
-        
-        # Add header with code length
-        header = len(self.huffman_codes).to_bytes(2, byteorder='big')
-        
-        # Add code table
-        code_table = bytearray()
-        for char, code in self.huffman_codes.items():
-            # Store character, code length, and code
-            char_bytes = char.encode('utf-8')
-            code_table.extend(len(char_bytes).to_bytes(1, byteorder='big'))
-            code_table.extend(char_bytes)
-            code_table.extend(len(code).to_bytes(1, byteorder='big'))
-            code_table.extend(int(code, 2).to_bytes((len(code) + 7) // 8, byteorder='big'))
-        
-        # Convert bit string to bytes
-        # Calculate padding needed
-        padding = 8 - (len(encoded_text) % 8) if len(encoded_text) % 8 != 0 else 0
-        padded_encoded_text = encoded_text + '0' * padding
-        
-        # Store padding amount in first byte
-        padding_info = padding.to_bytes(1, byteorder='big')
-        
-        # Convert to bytes
-        encoded_bytes = bytearray()
-        for i in range(0, len(padded_encoded_text), 8):
-            byte = padded_encoded_text[i:i+8]
-            encoded_bytes.append(int(byte, 2))
-        
-        # Combine all parts
-        compressed_data = bytearray(header)
-        compressed_data.extend(code_table)
-        compressed_data.extend(padding_info)
-        compressed_data.extend(encoded_bytes)
-        
-        self.compressed_size = len(compressed_data)
-        
-        return bytes(compressed_data)
-    
-    def decompress_data(self, compressed_data):
-        """
-        Decompress the given data using Huffman coding.
-        
-        Args:
-            compressed_data (bytes): The compressed data
-            
-        Returns:
-            str: The decompressed text
-        """
-        # Read header to get code table size
-        code_table_size = int.from_bytes(compressed_data[0:2], byteorder='big')
-        
-        # Recreate code table
-        self.reverse_codes = {}
-        pos = 2
-        for _ in range(code_table_size):
-            char_len = compressed_data[pos]
-            pos += 1
-            char = compressed_data[pos:pos+char_len].decode('utf-8')
-            pos += char_len
-            code_len = compressed_data[pos]
-            pos += 1
-            code_bytes = compressed_data[pos:pos+((code_len+7)//8)]
-            pos += (code_len+7)//8
-            
-            # Convert bytes to bit string
-            code = bin(int.from_bytes(code_bytes, byteorder='big'))[2:].zfill(code_len)
-            self.reverse_codes[code] = char
-        
-        # Get padding information
-        padding = compressed_data[pos]
-        pos += 1
-        
-        # Get encoded data
-        encoded_bytes = compressed_data[pos:]
-        
-        # Convert bytes to bit string
-        encoded_text = ''.join(bin(byte)[2:].zfill(8) for byte in encoded_bytes)
-        
-        # Remove padding
-        encoded_text = encoded_text[:-padding] if padding > 0 else encoded_text
-        
-        # Decode the text
-        decoded_text = ""
+        # Create a priority queue (min-heap) based on character frequencies
+        heap = [[weight, [char, ""]] for char, weight in frequency.items()]
+        heapq.heapify(heap)
+
+        while len(heap) > 1:
+            # Pop two nodes with lowest frequencies
+            low1 = heapq.heappop(heap)
+            low2 = heapq.heappop(heap)
+
+            # Merge them and update their codes
+            for pair in low1[1:]:
+                pair[1] = '0' + pair[1]
+            for pair in low2[1:]:
+                pair[1] = '1' + pair[1]
+
+            # Add the merged node back to the heap
+            heapq.heappush(heap, [low1[0] + low2[0]] + low1[1:] + low2[1:])
+
+        # Get the Huffman codes
+        huff_codes = sorted(heapq.heappop(heap)[1:], key=lambda p: (len(p[-1]), p))
+        huffman_dict = {char: code for char, code in huff_codes}
+
+        encoded_str = ''.join(huffman_dict[char] for char in text)
+        # Reverse the Huffman codes for decoding
+        reverse_huff_codes = {v: k for k, v in huffman_dict.items()}
+        #Decoding the Huffman Coded Generated
+        self.decoded_text = ""
+        self.current_bits = ""
+        reverse_codes = {v: k for k, v in huffman_dict.items()}
+
+        #Travese through each bit
+        for bit in encoded_str:
+            self.current_bits += bit
+            if self.current_bits in reverse_codes:
+                self.decoded_text += reverse_codes[self.current_bits]
+                self.current_bits = ""
+
+        # Return the Huffman codes and reverse codes
+        return huffman_dict, self.reverse_huff_codes
+
+
+    # Function to encode text using Huffman codes
+    def encode_text(self, text, huff_codes):
+        encoded_text = ''.join(huff_codes[char] for char in text)
+        return encoded_text
+
+    # Function to convert the encoded text (binary string) to bytes
+    def binary_string_to_bytes(self, binary_string):
+        # Ensure the binary string length is a multiple of 8 by padding if necessary
+        padding = 8 - len(binary_string) % 8
+        binary_string = '0' * padding + binary_string
+
+        # Convert the binary string into bytes
+        byte_array = bytearray()
+        for i in range(0, len(binary_string), 8):
+            byte_array.append(int(binary_string[i:i+8], 2))
+            self.compressed_byte+=1
+        print(self.compressed_byte)
+        return byte_array
+
+    # Function to convert bytes back to a binary string
+    def bytes_to_binary_string(self, byte_array):
+        binary_string = ''.join(f'{byte:08b}' for byte in byte_array)
+        return binary_string
+    # Function to decode the binary string back to text using reverse Huffman codes
+    def decode_text(self, binary_string):
+        self.decoded_text = []
         current_code = ""
-        for bit in encoded_text:
+        
+        # Read each bit from the binary string and try to match it with Huffman codes
+        for bit in binary_string:
             current_code += bit
-            if current_code in self.reverse_codes:
-                decoded_text += self.reverse_codes[current_code]
+            if current_code in self.reverse_huff_codes:
+                self.decoded_text.append(self.reverse_huff_codes[current_code])
                 current_code = ""
         
-        return decoded_text
-    
-    def get_compression_stats(self):
-        """
-        Get statistics about the compression.
+        return ''.join(self.decoded_text)
+
+    # Function to open file and return content as a string
+    def open_file(self):
+        if self.file_path:  # Check if a file was selected
+            with open(self.file_path, "r") as file:
+                content = file.read()
+                # Now process the content for Huffman Coding
+                self.process_text(content)
+
+    # Function to process text with Huffman coding and display the result
+    def process_text(self, content):
+        huff_codes, self.reverse_huff_codes = self.huffman_coding(content)
         
-        Returns:
-            dict: Dictionary containing compression statistics
-        """
-        if self.original_size == 0:
-            return {
-                "original_size": 0,
-                "compressed_size": 0,
-                "compression_ratio": 1.0,
-                "space_saving": 0.0
-            }
+        # Convert the Huffman codes to a string for display
+        huff_code_str = "\n".join([f"{char}: {code}" for char, code in huff_codes.items()])
         
-        compression_ratio = self.original_size / self.compressed_size
-        space_saving = (1 - (self.compressed_size / self.original_size)) * 100
+        # Encode the text using the Huffman codes
+        encoded_text = self.encode_text(content, huff_codes)
         
-        return {
-            "original_size": self.original_size,
-            "compressed_size": self.compressed_size,
-            "compression_ratio": compression_ratio,
-            "space_saving": space_saving
-        }
-    
-    def _build_huffman_tree(self, frequency):
-        """
-        Build the Huffman tree and return the codes.
+        # Convert the encoded text (binary string) to bytes
+        encoded_bytes = self.binary_string_to_bytes(encoded_text)
         
-        Args:
-            frequency (dict): Frequency of each character
-            
-        Returns:
-            dict: Dictionary of Huffman codes for each character
-        """
-        heap = [[freq, [char, ""]] for char, freq in frequency.items()]
-        heapq.heapify(heap)
+        # Save the compressed data to a binary file (automatically saves in the same directory with 'compressed.bin')
+        self.save_compressed_data(encoded_bytes)
         
-        while len(heap) > 1:
-            lo = heapq.heappop(heap)
-            hi = heapq.heappop(heap)
-            
-            for pair in lo[1:]:
-                pair[1] = '0' + pair[1]
-            for pair in hi[1:]:
-                pair[1] = '1' + pair[1]
-            
-            heapq.heappush(heap, [lo[0] + hi[0]] + lo[1:] + hi[1:])
+        # Clear the text widget and insert the Huffman codes
+        text_area = f"Huffman Codes:\n\n{huff_code_str}\n"
         
-        huffman_codes = {char: code for char, code in sorted(heapq.heappop(heap)[1:], key=lambda x: len(x[1]))}
-        return huffman_codes
+        # compression_detail.config(text=f"self.original {self.original} bytes | Compressed: {self.compressed_byte} bytes | Ratio: {(self.compressed_byte/self.original)*100}")
+
+    # Function to save the compressed data to a binary file with a fixed name ('compressed.bin')
+    def save_compressed_data(self, encoded_bytes):
+        # Get the current working directory
+        current_directory = os.getcwd()
+
+        # Define the file path for saving the compressed data as 'compressed.bin'
+        save_path = os.path.join(current_directory, "compressed.bin")
+        
+        # Save the binary file
+        with open(save_path, "wb") as file:
+            file.write(encoded_bytes)
+
+        print(f"Compressed data saved to: {save_path}")
+
+    # Function to open and decode the binary file
+    def decode_bin_file(self):
+        # Ask the user for a binary file to decode
+        if self.file_path:
+            with open(self.file_path, "rb") as file:
+                binary_data = file.read()
+
+                # Convert bytes back to a binary string
+                binary_string = self.bytes_to_binary_string(binary_data)
+
+
+                # Display the decoded text in the separate text widget
+                print(self.decoded_text)
+huff = Huffman()
+huff.open_file()
+huff.decode_bin_file()
