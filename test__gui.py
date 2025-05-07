@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import filedialog, scrolledtext, messagebox, ttk
 from person2 import find_matches
 from naive import naive_search
-from Mergesort import merge_sort
+from mergeSort import merge_sort
 import re
 import os
 import networkx as nx
@@ -797,29 +797,28 @@ class DocumentAnalysisGUI:
         # Show original content
         self.original_text.insert(tk.END, selected_doc.content)
         
-        try:
-            # Use our simplified Huffman implementation
-            from Huffman import Huffman
-            huffman = Huffman()
+        
+        # Use our simplified Huffman implementation
+        from huffmancopy import Huffman
+        huffman = Huffman()
+        huffman.open_file(doc_title)
+        output = huffman.decode_bin_file()
+        # # Compress the document content
+        compressed_data = output
+        
+        # # Store compressed data with the document
+        selected_doc.compressed_data = compressed_data
+        selected_doc.huffman_instance = huffman
+        
+        # Get and display compression statistics
+        stats = huffman.get_compression_stats()
+        self._display_compression_stats(stats)
+        
+        # Show success message
+        messagebox.showinfo("Compression Complete", 
+                            f"Document compressed! Size reduced from {stats['original_size']:,} bytes to {stats['compressed_size']:,} bytes.")
             
-            # Compress the document content
-            compressed_data = huffman.compress_text(selected_doc.content)
-            
-            # Store compressed data with the document
-            selected_doc.compressed_data = compressed_data
-            selected_doc.huffman_instance = huffman
-            
-            # Get and display compression statistics
-            stats = huffman.get_compression_stats()
-            self._display_compression_stats(stats)
-            
-            # Show success message
-            messagebox.showinfo("Compression Complete", 
-                               f"Document compressed! Size reduced from {stats['original_size']:,} bytes to {stats['compressed_size']:,} bytes.")
-            
-        except Exception as e:
-            messagebox.showerror("Compression Error", f"Error during compression: {str(e)}")
-            self.compression_stats_text.insert(tk.END, f"Error: {str(e)}")
+        
     
     def _display_compression_stats(self, stats):
         """
@@ -890,10 +889,8 @@ class DocumentAnalysisGUI:
         try:
             # Get the Huffman instance stored with the document
             huffman = selected_doc.huffman_instance
-            
             # Decompress the data
-            decompressed_text = huffman.decompress_data(selected_doc.compressed_data)
-            
+            decompressed_text = huffman.decode_bin_file()
             # Display the decompressed text
             self.original_text.delete(1.0, tk.END)
             self.original_text.insert(tk.END, decompressed_text)
@@ -946,7 +943,8 @@ class DocumentAnalysisGUI:
         try:
             # Write compressed data to file
             with open(file_path, "wb") as file:
-                file.write(selected_doc.compressed_data)
+                bytes_data = selected_doc.compressed_data.encode('utf-8')
+                file.write(bytes_data)
             
             messagebox.showinfo("Save Successful", f"Compressed file saved to {file_path}")
             
