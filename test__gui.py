@@ -8,7 +8,7 @@ import os
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-
+#changed mergesort capitalizationh
 class DocumentInfo:
     """A class for storing and extracting document information and metadata."""
     def __init__(self, path):
@@ -18,198 +18,64 @@ class DocumentInfo:
         self.date = ""
         self.content = ""
         self.references = []
-        self.keywords = []
-        self.abstract = ""
-        self.sections = {}
         self.extract_metadata()
     
     def extract_metadata(self):
+        """Extract key metadata from the document.
+        Focuses on core elements: title, author, date, and references.
+        """
         try:
             with open(self.path, 'r', encoding='utf-8') as file:
                 self.content = file.read()
+                # Extract only the essential metadata
                 self._extract_basic_metadata()
-                self._extract_abstract()
                 self._extract_references()
-                self._extract_keywords()
-                self._extract_sections()
         except Exception as e:
             print(f"Error reading file {self.path}: {str(e)}")
     
     def _extract_basic_metadata(self):
-        # Extract title
-        title_patterns = [
-            r'Title:\s*(.*?)(?:\n|$)',
-            r'^\s*#\s+(.*?)(?:\n|$)',
-            r'^\s*TITLE:\s*(.*?)(?:\n|$)',
-            r'^\s*<title>(.*?)</title>'
-        ]
-        
-        for pattern in title_patterns:
-            title_match = re.search(pattern, self.content, re.IGNORECASE | re.MULTILINE)
-            if title_match:
-                self.title = title_match.group(1).strip()
-                break
-        
-        if not self.title:
+        """Extract title, author, and date from the document using simple patterns.
+        Based on the standard format where these items are labeled clearly at the start:
+        Title: Document Title
+        Author: Author Name
+        Date: YYYY-MM-DD
+        """
+        # Extract title - look for a simple "Title:" prefix
+        title_match = re.search(r'Title:\s*(.*?)(?:\n|$)', self.content, re.IGNORECASE | re.MULTILINE)
+        if title_match:
+            self.title = title_match.group(1).strip()
+        else:
             self.title = os.path.basename(self.path)
         
-        # Extract author
-        author_patterns = [
-            r'Author:\s*(.*?)(?:\n|$)',
-            r'By:\s*(.*?)(?:\n|$)',
-            r'^\s*AUTHOR:\s*(.*?)(?:\n|$)',
-            r'Written by\s*[:;]\s*(.*?)(?:\n|$)'
-        ]
+        # Extract author - look for a simple "Author:" prefix
+        author_match = re.search(r'Author:\s*(.*?)(?:\n|$)', self.content, re.IGNORECASE | re.MULTILINE)
+        if author_match:
+            self.author = author_match.group(1).strip()
         
-        for pattern in author_patterns:
-            author_match = re.search(pattern, self.content, re.IGNORECASE | re.MULTILINE)
-            if author_match:
-                self.author = author_match.group(1).strip()
-                break
-        
-        # Extract date
-        date_patterns = [
-            r'Date:\s*(.*?)(?:\n|$)',
-            r'Published:\s*(.*?)(?:\n|$)',
-            r'^\s*DATE:\s*(.*?)(?:\n|$)',
-            r'\((\d{4}(?:-\d{2}-\d{2})?)\)',
-            r'(\d{1,2}/\d{1,2}/\d{2,4})',
-            r'(\d{4}-\d{2}-\d{2})'
-        ]
-        
-        for pattern in date_patterns:
-            date_match = re.search(pattern, self.content, re.IGNORECASE | re.MULTILINE)
-            if date_match:
-                self.date = date_match.group(1).strip()
-                break
+        # Extract date - look for a simple "Date:" prefix
+        date_match = re.search(r'Date:\s*(.*?)(?:\n|$)', self.content, re.IGNORECASE | re.MULTILINE)
+        if date_match:
+            self.date = date_match.group(1).strip()
     
-    def _extract_abstract(self):
-        abstract_patterns = [
-            r'Abstract[:\s]+(.*?)(?:\n\n|\n[A-Z]|\n\d|\n\t|$)',
-            r'ABSTRACT[:\s]+(.*?)(?:\n\n|\n[A-Z]|\n\d|\n\t|$)',
-            r'Summary[:\s]+(.*?)(?:\n\n|\n[A-Z]|\n\d|\n\t|$)'
-        ]
-        
-        for pattern in abstract_patterns:
-            abstract_match = re.search(pattern, self.content, re.IGNORECASE | re.DOTALL)
-            if abstract_match:
-                raw_abstract = abstract_match.group(1).strip()
-                self.abstract = re.sub(r'\n(?!\n)', ' ', raw_abstract)
-                self.abstract = re.sub(r'\s+', ' ', self.abstract).strip()
-                break
+    # Abstract extraction removed - not required
     
     def _extract_references(self):
-        ref_section_patterns = [
-            r'References:(.*?)(?:\n\n|$)',
-            r'REFERENCES[:\s]+(.*?)(?:\n\n|$)',
-            r'Bibliography:(.*?)(?:\n\n|$)',
-            r'Works Cited:(.*?)(?:\n\n|$)'
-        ]
-        
+        """Extract references from the document.
+        Based on a standard format where references are in a section labeled 'References:'
+        and each reference is numbered with [1], [2], etc.
+        """
         self.references = []
         
-        for pattern in ref_section_patterns:
-            ref_section = re.search(pattern, self.content, re.IGNORECASE | re.DOTALL)
-            if ref_section:
-                ref_text = ref_section.group(1)
-                
-                # Try different reference formats
-                ref_matches = re.findall(r'\[\d+\]\s*(.*?)(?:\.\s|\.\n|$)', ref_text)
-                if ref_matches:
-                    self.references.extend([ref.strip() for ref in ref_matches])
-                    continue
-                
-                ref_matches = re.findall(r'\d+\.\s*(.*?)(?:\.\s|\.\n|$)', ref_text)
-                if ref_matches:
-                    self.references.extend([ref.strip() for ref in ref_matches])
-                    continue
-                
-                ref_matches = re.findall(r'([A-Z][^\.]+\(\d{4}\)[^\.]+\.)', ref_text)
-                if ref_matches:
-                    self.references.extend([ref.strip() for ref in ref_matches])
-                    continue
-                
-                if not self.references:
-                    lines = [line.strip() for line in ref_text.split('\n') if line.strip()]
-                    self.references.extend(lines)
-        
-        if not self.references:
-            citations = re.findall(r'[\(\[]([\w\s]+,\s*\d{4})[\)\]]', self.content)
-            self.references = list(set(citations))
-    
-    def _extract_keywords(self):
-        keyword_patterns = [
-            r'Keywords?[:\s]+(.*?)(?:\n\n|\n[A-Z]|\n\d|\n\t|$)',
-            r'Key\s*words?[:\s]+(.*?)(?:\n\n|\n[A-Z]|\n\d|\n\t|$)',
-            r'Tags?[:\s]+(.*?)(?:\n\n|\n[A-Z]|\n\d|\n\t|$)'
-        ]
-        
-        for pattern in keyword_patterns:
-            keyword_match = re.search(pattern, self.content, re.IGNORECASE | re.MULTILINE)
-            if keyword_match:
-                keyword_text = keyword_match.group(1).strip()
-                if ';' in keyword_text:
-                    self.keywords = [k.strip() for k in keyword_text.split(';')]
-                else:
-                    self.keywords = [k.strip() for k in keyword_text.split(',')]
-                break
-    
-    def _extract_sections(self):
-        section_pattern = r'(?:^|\n)(?:\d+\.\s*)?([A-Z][^a-z\n]{2,}[A-Za-z\s]+)(?:\n|\:)(.*?)(?=(?:\n(?:\d+\.\s*)?[A-Z][^a-z\n]{2,}[A-Za-z\s]+(?:\n|\:))|$)'
-        
-        section_matches = re.finditer(section_pattern, self.content, re.DOTALL)
-        
-        for match in section_matches:
-            section_title = match.group(1).strip()
-            section_content = match.group(2).strip()
-            section_content = re.sub(r'\n+', '\n', section_content)
-            self.sections[section_title] = section_content
-    
-    def get_citation_info(self):
-        authors_cited = []
-        
-        citation_pattern = r'\(([A-Z][a-z]+(?:\s+et\s+al\.)?),\s*(\d{4})\)'
-        citations = re.findall(citation_pattern, self.content)
-        
-        for author, year in citations:
-            authors_cited.append(f"{author} ({year})")
-        
-        for ref in self.references:
-            author_match = re.search(r'([A-Z][a-z]+(?:\s+et\s+al\.)?)[,\s]+\(?(\d{4})\)?', ref)
-            if author_match:
-                author, year = author_match.groups()
-                authors_cited.append(f"{author} ({year})")
-        
-        return {
-            "title": self.title,
-            "author": self.author,
-            "date": self.date,
-            "authors_cited": list(set(authors_cited))
-        }
-    
-    def get_content_summary(self):
-        if self.abstract:
-            if len(self.abstract) > 200:
-                return self.abstract[:197] + "..."
-            return self.abstract
-        
-        paragraphs = re.split(r'\n\s*\n', self.content)
-        
-        for paragraph in paragraphs:
-            if ":" in paragraph or len(paragraph) < 50:
-                continue
-                
-            if len(paragraph) > 200:
-                return paragraph[:197] + "..."
-            return paragraph
+        # Look for the References section
+        ref_section = re.search(r'References:(.*?)(?:\n\n|$)', self.content, re.IGNORECASE | re.DOTALL)
+        if ref_section:
+            ref_text = ref_section.group(1).strip()
             
-        for paragraph in paragraphs:
-            if paragraph.strip():
-                if len(paragraph) > 200:
-                    return paragraph[:197] + "..."
-                return paragraph
-                
-        return "No content summary available."
+            # Extract references in the format [1] Author, et al. (Year). "Title."
+            ref_matches = re.findall(r'\[\d+\]\s*(.*?)(?:\n|$)', ref_text)
+            if ref_matches:
+                self.references = [ref.strip() for ref in ref_matches]
+
     
     def __str__(self):
         if self.author and self.date:
@@ -590,8 +456,6 @@ class DocumentAnalysisGUI:
             doc2_content (str): Content of second document
             matched_phrases (list): List of matched phrases to highlight
         """
-        from person2 import highlight_matched_phrases
-        
         # Process each document
         for phrase in matched_phrases:
             # Find all instances of phrase in document 1
@@ -720,33 +584,33 @@ class DocumentAnalysisGUI:
         self.update_graph_stats(G)
     
     def _build_citation_graph(self):
+        """Build a citation graph based on document titles and references.
+        Simplified to work with the revised metadata extraction.
+        """
         citation_graph = {}
         
+        # Initialize empty list for each document
         for doc in self.documents:
             citation_graph[doc.title] = []
         
+        # Build connections based on references
         for doc in self.documents:
-            citation_info = doc.get_citation_info()
-            authors_cited = citation_info.get("authors_cited", [])
-            
-            for cited_author in authors_cited:
-                for target_doc in self.documents:
-                    if target_doc.author and cited_author and target_doc.author in cited_author:
-                        if target_doc.title not in citation_graph[doc.title] and target_doc.title != doc.title:
-                            citation_graph[doc.title].append(target_doc.title)
-            
             for ref in doc.references:
                 for target_doc in self.documents:
-                    if target_doc.title in citation_graph[doc.title] or target_doc.title == doc.title:
+                    # Skip self-citations
+                    if target_doc.title == doc.title:
                         continue
-                        
+                    
+                    # Check if target document's author appears in the reference
                     if target_doc.author and target_doc.author in ref:
-                        citation_graph[doc.title].append(target_doc.title)
-                        break
-                        
-                    if target_doc.title and any(word in ref.lower() for word in target_doc.title.lower().split()):
-                        citation_graph[doc.title].append(target_doc.title)
-                        break
+                        if target_doc.title not in citation_graph[doc.title]:
+                            citation_graph[doc.title].append(target_doc.title)
+                        continue
+                    
+                    # Check if target document's title appears in the reference
+                    if target_doc.title and target_doc.title.lower() in ref.lower():
+                        if target_doc.title not in citation_graph[doc.title]:
+                            citation_graph[doc.title].append(target_doc.title)
         
         return citation_graph
     
