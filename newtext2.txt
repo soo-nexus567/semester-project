@@ -28,4 +28,3 @@ References:
 [3] Smith, J. (2021). “Advancements in Natural Language Processing.”
 [4] Davis, R. (2019). “Optimizing Document Compression for Scientific Literature.”
 [5] Wang, X., et al. (2021). “Interactive Visualization of Academic Knowledge Graphs.”
-[6] yo  
