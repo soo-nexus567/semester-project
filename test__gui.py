@@ -3,11 +3,14 @@ from tkinter import filedialog, scrolledtext, messagebox, ttk
 from person2 import find_matches
 from naive import naive_search
 from mergeSort import merge_sort
+from BFS_traversal import bfs
+from DFS_traversal import dfs
 import re
 import os
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from collections import deque
 #changed mergesort capitalizationh
 class DocumentInfo:
     """A class for storing and extracting document information and metadata."""
@@ -219,6 +222,24 @@ class DocumentAnalysisGUI:
         self.graph_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.graph_frame, text="Citation Graph")
         
+        # File selection for traversal
+        traversal_frame = ttk.LabelFrame(self.graph_frame, text="Citation Traversal")
+        traversal_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        # Starting document selection
+        start_frame = ttk.Frame(traversal_frame)
+        start_frame.pack(fill=tk.X, padx=5, pady=5)
+        ttk.Label(start_frame, text="Starting Document:").pack(side=tk.LEFT, padx=5)
+        self.start_doc_var = tk.StringVar()
+        self.start_doc_combo = ttk.Combobox(start_frame, textvariable=self.start_doc_var, width=50)
+        self.start_doc_combo.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
+        
+        # Traversal buttons
+        buttons_frame = ttk.Frame(traversal_frame)
+        buttons_frame.pack(fill=tk.X, padx=5, pady=5)
+        ttk.Button(buttons_frame, text="BFS Traversal", command=self.perform_bfs_traversal).pack(side=tk.LEFT, padx=5)
+        ttk.Button(buttons_frame, text="DFS Traversal", command=self.perform_dfs_traversal).pack(side=tk.LEFT, padx=5)
+        
         # Create graph button
         ttk.Button(self.graph_frame, text="Create Citation Graph", 
                   command=self.create_citation_graph).pack(anchor=tk.W, padx=10, pady=10)
@@ -313,10 +334,14 @@ class DocumentAnalysisGUI:
         # Update compression combo
         self.compression_doc_combo['values'] = doc_titles
         
+        # Update citation traversal combo
+        self.start_doc_combo['values'] = doc_titles
+        
         # Set defaults if documents are available
         if doc_titles:
             self.file1_combo.current(0)
             self.compression_doc_combo.current(0)
+            self.start_doc_combo.current(0)
             if len(doc_titles) > 1:
                 self.file2_combo.current(1)
             else:
@@ -634,6 +659,118 @@ class DocumentAnalysisGUI:
             stats += f"• Network density: {density:.2f}%\n"
         
         self.stats_text.insert(tk.END, stats)
+    
+    def perform_bfs_traversal(self):
+        """Visualize BFS traversal on the citation graph."""
+        start_doc = self.start_doc_var.get()
+        if not start_doc:
+            messagebox.showwarning("Warning", "Please select a starting document")
+            return
+            
+        # Build citation graph if not already built
+        citation_graph = self._build_citation_graph()
+        
+        if start_doc not in citation_graph:
+            messagebox.showwarning("Warning", "Starting document not found in the citation graph")
+            return
+        
+        # Get traversal order using BFS
+        visited = set()
+        queue = deque([start_doc])
+        traversal_order = []
+        
+        while queue:
+            node = queue.popleft()
+            if node not in visited:
+                traversal_order.append(node)
+                visited.add(node)
+                for neighbor in citation_graph.get(node, []):
+                    if neighbor not in visited:
+                        queue.append(neighbor)
+        
+        # Display visualization
+        self._visualize_traversal(citation_graph, traversal_order, "BFS")
+    
+    def perform_dfs_traversal(self):
+        """Visualize DFS traversal on the citation graph."""
+        start_doc = self.start_doc_var.get()
+        if not start_doc:
+            messagebox.showwarning("Warning", "Please select a starting document")
+            return
+            
+        # Build citation graph if not already built
+        citation_graph = self._build_citation_graph()
+        
+        if start_doc not in citation_graph:
+            messagebox.showwarning("Warning", "Starting document not found in the citation graph")
+            return
+        
+        # Get traversal order using DFS
+        visited = set()
+        traversal_order = []
+        
+        def dfs_visit(node):
+            if node not in visited:
+                traversal_order.append(node)
+                visited.add(node)
+                for neighbor in citation_graph.get(node, []):
+                    dfs_visit(neighbor)
+        
+        dfs_visit(start_doc)
+        
+        # Display visualization
+        self._visualize_traversal(citation_graph, traversal_order, "DFS")
+        
+    def _visualize_traversal(self, citation_graph, traversal_order, traversal_type):
+        """Helper method to visualize graph traversal with animation."""
+        # Clear previous graph
+        for widget in self.graph_display_frame.winfo_children():
+            widget.destroy()
+            
+        # Create graph and layout
+        G = nx.DiGraph(citation_graph)
+        pos = nx.spring_layout(G, seed=42)
+        
+        # Create figure and canvas
+        fig, ax = plt.subplots(figsize=(8, 6))
+        canvas = FigureCanvasTkAgg(fig, master=self.graph_display_frame)
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        
+        # Draw initial graph with all nodes gray
+        nodes = nx.draw_networkx_nodes(G, pos, node_size=700, node_color='lightgray', ax=ax)
+        nx.draw_networkx_edges(G, pos, width=1, edge_color='gray', ax=ax)
+        nx.draw_networkx_labels(G, pos, font_size=9, ax=ax)
+        
+        # Set title and turn off axis
+        ax.set_title(f"{traversal_type} Traversal")
+        ax.axis('off')
+        canvas.draw()
+        
+        # Animation function
+        node_list = list(G.nodes())
+        node_colors = ['lightgray'] * len(node_list)
+        color = 'red' if traversal_type == "BFS" else 'green'
+        
+        def update_graph(step):
+            if step < len(traversal_order):
+                # Update color of current node
+                current = traversal_order[step]
+                idx = node_list.index(current) if current in node_list else -1
+                if idx >= 0:
+                    node_colors[idx] = color
+                    nodes.set_color(node_colors)
+                
+                # Update stats text
+                self.stats_text.delete(1.0, tk.END)
+                self.stats_text.insert(tk.END, f"Step {step+1}: Visiting {current}")
+                
+                # Schedule next step
+                canvas.draw()
+                if step + 1 < len(traversal_order):
+                    self.root.after(800, update_graph, step + 1)
+        
+        # Start animation
+        self.root.after(500, update_graph, 0)
     
     def compress_document(self):
         """
