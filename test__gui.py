@@ -653,11 +653,6 @@ class DocumentAnalysisGUI:
         stats += f"• Number of documents: {num_nodes}\n"
         stats += f"• Number of citations: {num_edges}\n"
         
-        if num_nodes > 1:
-            max_possible_edges = num_nodes * (num_nodes - 1)
-            density = (num_edges / max_possible_edges) * 100 if max_possible_edges > 0 else 0
-            stats += f"• Network density: {density:.2f}%\n"
-        
         self.stats_text.insert(tk.END, stats)
     
     def perform_bfs_traversal(self):
@@ -840,27 +835,9 @@ class DocumentAnalysisGUI:
         self.compression_stats_text.insert(tk.END, f"Compressed size: {compressed_bytes:,} bytes\n")
         
         compression_ratio = stats["compression_ratio"]
-        space_saving = stats["space_saving"]
         
-        # Determine the compression quality indicator
-        indicator = "Minimal ⚠️"
-        if space_saving > 75:
-            indicator = "Excellent! 🌟"
-        elif space_saving > 50:
-            indicator = "Very good! ✓"
-        elif space_saving > 25:
-            indicator = "Good ✓"
-        
-        # Display the compression ratio and space saving
-        self.compression_stats_text.insert(tk.END, f"Compression ratio: {compression_ratio:.2f}x {indicator}\n")
-        self.compression_stats_text.insert(tk.END, f"Space saved: {space_saving:.2f}%\n")
-        
-        # Add a visual bar to show compression ratio
-        if original_bytes > 0:
-            bar_length = 20
-            filled_bars = int((compressed_bytes / original_bytes) * bar_length)
-            compression_display = "█" * filled_bars + "░" * (bar_length - filled_bars)
-            self.compression_stats_text.insert(tk.END, f"\nCompression visualization: \n{compression_display}\n")
+        # Display the compression ratio
+        self.compression_stats_text.insert(tk.END, f"Compression ratio: {compression_ratio:.2f}%\n")
         
         # Configure text tags
         self.compression_stats_text.tag_configure("title", font=("TkDefaultFont", 12, "bold"))
