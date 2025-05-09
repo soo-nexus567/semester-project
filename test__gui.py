@@ -162,7 +162,7 @@ class DocumentAnalysisGUI:
         # Button for string matching
         ttk.Button(match_files_frame, text="Find Matches", 
                 command=self.find_string_matches).pack(anchor=tk.W, padx=10, pady=5)
-        
+         
         # Naive search section
         naive_frame = ttk.LabelFrame(self.match_frame, text="Naive String Search")
         naive_frame.pack(fill=tk.X, padx=10, pady=10)
