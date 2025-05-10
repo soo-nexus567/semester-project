@@ -170,7 +170,6 @@ class Huffman:
         }
 if __name__ == "__main__":
     huff = Huffman()
-    huff.open_file("input.txt")
-    print(huff.decode_bin_file())
+    huff.open_file("newtext1.txt")
     print(huff.get_compression_stats())
     
