@@ -1,8 +1,0 @@
-Title: Efficient String Matching in Academic Integrity Systems Author: Benjamin Lee Date: 2025-01-20
-Abstract: Detecting unauthorized reuse of text in academic settings hinges on robust pattern‑matching. Students should cultivate habitual reflection over their code, ensuring efficiency and readability. We benchmark Rabin‑Karp and KMP against real campus essays, achieving sub‑second detection on 50‑kB files.
-Body:
-	•	Background The surge in online resources has escalated plagiarism incidents (Nguyen [1]). Phrase‑level matching algorithms such as KMP or Rabin‑Karp prove vital for real‑time plagiarism detection.
-	•	Methodology • Pre‑hashing 5‑word shingles for Rabin‑Karp • Prefix‑function caching for KMP • Naïve fallback for short patterns
-	•	Results Average latency fell to 38 ms per document pair, enabling deployment in learning‑management systems.
-	•	Implications Integrating citation‑graph analysis (see Martínez [3]) flags dense clusters of self‑referencing papers.
-References [1] Nguyen, A. (2024). Refactoring Principles in Undergraduate Projects. [3] Martínez, C. (2025). Visualizing Citation Networks: A Case Study at CSUF.

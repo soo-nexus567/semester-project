@@ -3,11 +3,15 @@ from tkinter import filedialog, scrolledtext, messagebox, ttk
 from person2 import find_matches
 from naive import naive_search
 from mergeSort import merge_sort
+from BFS_traversal import bfs
+from DFS_traversal import dfs
+from greedy_optimizer import prioritize_document_pairs
 import re
 import os
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from collections import deque
 #changed mergesort capitalizationh
 class DocumentInfo:
     """A class for storing and extracting document information and metadata."""
@@ -156,10 +160,16 @@ class DocumentAnalysisGUI:
         self.file2_combo = ttk.Combobox(file2_frame, textvariable=self.file2_var, width=50)
         self.file2_combo.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
         
-        # Button for string matching
-        ttk.Button(match_files_frame, text="Find Matches", 
-                command=self.find_string_matches).pack(anchor=tk.W, padx=10, pady=5)
+        # Buttons for string matching
+        buttons_frame = ttk.Frame(match_files_frame)
+        buttons_frame.pack(fill=tk.X, padx=10, pady=5)
         
+        ttk.Button(buttons_frame, text="Find Matches", 
+                command=self.find_string_matches).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Button(buttons_frame, text="Prioritize Documents", 
+                command=self.prioritize_documents).pack(side=tk.LEFT, padx=5)
+         
         # Naive search section
         naive_frame = ttk.LabelFrame(self.match_frame, text="Naive String Search")
         naive_frame.pack(fill=tk.X, padx=10, pady=10)
@@ -218,6 +228,24 @@ class DocumentAnalysisGUI:
         # Tab 3: Citation Graph
         self.graph_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.graph_frame, text="Citation Graph")
+        
+        # File selection for traversal
+        traversal_frame = ttk.LabelFrame(self.graph_frame, text="Citation Traversal")
+        traversal_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        # Starting document selection
+        start_frame = ttk.Frame(traversal_frame)
+        start_frame.pack(fill=tk.X, padx=5, pady=5)
+        ttk.Label(start_frame, text="Starting Document:").pack(side=tk.LEFT, padx=5)
+        self.start_doc_var = tk.StringVar()
+        self.start_doc_combo = ttk.Combobox(start_frame, textvariable=self.start_doc_var, width=50)
+        self.start_doc_combo.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
+        
+        # Traversal buttons
+        buttons_frame = ttk.Frame(traversal_frame)
+        buttons_frame.pack(fill=tk.X, padx=5, pady=5)
+        ttk.Button(buttons_frame, text="BFS Traversal", command=self.perform_bfs_traversal).pack(side=tk.LEFT, padx=5)
+        ttk.Button(buttons_frame, text="DFS Traversal", command=self.perform_dfs_traversal).pack(side=tk.LEFT, padx=5)
         
         # Create graph button
         ttk.Button(self.graph_frame, text="Create Citation Graph", 
@@ -313,10 +341,14 @@ class DocumentAnalysisGUI:
         # Update compression combo
         self.compression_doc_combo['values'] = doc_titles
         
+        # Update citation traversal combo
+        self.start_doc_combo['values'] = doc_titles
+        
         # Set defaults if documents are available
         if doc_titles:
             self.file1_combo.current(0)
             self.compression_doc_combo.current(0)
+            self.start_doc_combo.current(0)
             if len(doc_titles) > 1:
                 self.file2_combo.current(1)
             else:
@@ -628,12 +660,119 @@ class DocumentAnalysisGUI:
         stats += f"• Number of documents: {num_nodes}\n"
         stats += f"• Number of citations: {num_edges}\n"
         
-        if num_nodes > 1:
-            max_possible_edges = num_nodes * (num_nodes - 1)
-            density = (num_edges / max_possible_edges) * 100 if max_possible_edges > 0 else 0
-            stats += f"• Network density: {density:.2f}%\n"
-        
         self.stats_text.insert(tk.END, stats)
+    
+    def perform_bfs_traversal(self):
+        """Visualize BFS traversal on the citation graph."""
+        start_doc = self.start_doc_var.get()
+        if not start_doc:
+            messagebox.showwarning("Warning", "Please select a starting document")
+            return
+            
+        # Build citation graph if not already built
+        citation_graph = self._build_citation_graph()
+        
+        if start_doc not in citation_graph:
+            messagebox.showwarning("Warning", "Starting document not found in the citation graph")
+            return
+        
+        # Get traversal order using BFS
+        visited = set()
+        queue = deque([start_doc])
+        traversal_order = []
+        
+        while queue:
+            node = queue.popleft()
+            if node not in visited:
+                traversal_order.append(node)
+                visited.add(node)
+                for neighbor in citation_graph.get(node, []):
+                    if neighbor not in visited:
+                        queue.append(neighbor)
+        
+        # Display visualization
+        self._visualize_traversal(citation_graph, traversal_order, "BFS")
+    
+    def perform_dfs_traversal(self):
+        """Visualize DFS traversal on the citation graph."""
+        start_doc = self.start_doc_var.get()
+        if not start_doc:
+            messagebox.showwarning("Warning", "Please select a starting document")
+            return
+            
+        # Build citation graph if not already built
+        citation_graph = self._build_citation_graph()
+        
+        if start_doc not in citation_graph:
+            messagebox.showwarning("Warning", "Starting document not found in the citation graph")
+            return
+        
+        # Get traversal order using DFS
+        visited = set()
+        traversal_order = []
+        
+        def dfs_visit(node):
+            if node not in visited:
+                traversal_order.append(node)
+                visited.add(node)
+                for neighbor in citation_graph.get(node, []):
+                    dfs_visit(neighbor)
+        
+        dfs_visit(start_doc)
+        
+        # Display visualization
+        self._visualize_traversal(citation_graph, traversal_order, "DFS")
+        
+    def _visualize_traversal(self, citation_graph, traversal_order, traversal_type):
+        """Helper method to visualize graph traversal with animation."""
+        # Clear previous graph
+        for widget in self.graph_display_frame.winfo_children():
+            widget.destroy()
+            
+        # Create graph and layout
+        G = nx.DiGraph(citation_graph)
+        pos = nx.spring_layout(G, seed=42)
+        
+        # Create figure and canvas
+        fig, ax = plt.subplots(figsize=(8, 6))
+        canvas = FigureCanvasTkAgg(fig, master=self.graph_display_frame)
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        
+        # Draw initial graph with all nodes gray
+        nodes = nx.draw_networkx_nodes(G, pos, node_size=700, node_color='lightgray', ax=ax)
+        nx.draw_networkx_edges(G, pos, width=1, edge_color='gray', ax=ax)
+        nx.draw_networkx_labels(G, pos, font_size=9, ax=ax)
+        
+        # Set title and turn off axis
+        ax.set_title(f"{traversal_type} Traversal")
+        ax.axis('off')
+        canvas.draw()
+        
+        # Animation function
+        node_list = list(G.nodes())
+        node_colors = ['lightgray'] * len(node_list)
+        color = 'red' if traversal_type == "BFS" else 'green'
+        
+        def update_graph(step):
+            if step < len(traversal_order):
+                # Update color of current node
+                current = traversal_order[step]
+                idx = node_list.index(current) if current in node_list else -1
+                if idx >= 0:
+                    node_colors[idx] = color
+                    nodes.set_color(node_colors)
+                
+                # Update stats text
+                self.stats_text.delete(1.0, tk.END)
+                self.stats_text.insert(tk.END, f"Step {step+1}: Visiting {current}")
+                
+                # Schedule next step
+                canvas.draw()
+                if step + 1 < len(traversal_order):
+                    self.root.after(800, update_graph, step + 1)
+        
+        # Start animation
+        self.root.after(500, update_graph, 0)
     
     def compress_document(self):
         """
@@ -664,6 +803,7 @@ class DocumentAnalysisGUI:
         # Use our simplified Huffman implementation
         from huffmancopy import Huffman
         huffman = Huffman()
+        #huffman.open_file(doc_title)
         huffman.open_file(selected_doc.path)
         output = huffman.decode_bin_file()
         # # Compress the document content
@@ -701,27 +841,9 @@ class DocumentAnalysisGUI:
         self.compression_stats_text.insert(tk.END, f"Compressed size: {compressed_bytes:,} bytes\n")
         
         compression_ratio = stats["compression_ratio"]
-        space_saving = stats["space_saving"]
         
-        # Determine the compression quality indicator
-        indicator = "Minimal ⚠️"
-        if space_saving > 75:
-            indicator = "Excellent! 🌟"
-        elif space_saving > 50:
-            indicator = "Very good! ✓"
-        elif space_saving > 25:
-            indicator = "Good ✓"
-        
-        # Display the compression ratio and space saving
-        self.compression_stats_text.insert(tk.END, f"Compression ratio: {compression_ratio:.2f}x {indicator}\n")
-        self.compression_stats_text.insert(tk.END, f"Space saved: {space_saving:.2f}%\n")
-        
-        # Add a visual bar to show compression ratio
-        if original_bytes > 0:
-            bar_length = 20
-            filled_bars = int((compressed_bytes / original_bytes) * bar_length)
-            compression_display = "█" * filled_bars + "░" * (bar_length - filled_bars)
-            self.compression_stats_text.insert(tk.END, f"\nCompression visualization: \n{compression_display}\n")
+        # Display the compression ratio
+        self.compression_stats_text.insert(tk.END, f"Compression ratio: {compression_ratio:.2f}%\n")
         
         # Configure text tags
         self.compression_stats_text.tag_configure("title", font=("TkDefaultFont", 12, "bold"))
@@ -813,6 +935,66 @@ class DocumentAnalysisGUI:
             
         except Exception as e:
             messagebox.showerror("Save Error", f"Error saving file: {str(e)}")
+    
+    def prioritize_documents(self):
+        """
+        Run loaded documents through the greedy optimizer to prioritize document pairs
+        for plagiarism detection.
+        """
+        if len(self.documents) < 2:
+            messagebox.showwarning("Warning", "Please add at least two documents to prioritize")
+            return
+        
+        # Clear the results text
+        self.results_text.delete(1.0, tk.END)
+        self.results_text.insert(tk.END, "Analyzing documents...\n")
+        self.results_text.update()
+        
+        # Create a temporary directory with documents
+        temp_dir = os.path.join(os.getcwd(), "temp_docs")
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        try:
+            # Write documents to temp directory
+            file_to_doc = {}
+            for i, doc in enumerate(self.documents):
+                file_name = f"{i}_{doc.title.replace(' ', '_')}.txt"
+                file_path = os.path.join(temp_dir, file_name)
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(doc.content)
+                file_to_doc[file_path] = doc
+            
+            # Run the greedy optimizer
+            prioritized_pairs = prioritize_document_pairs(temp_dir)
+            
+            # Display results
+            self.results_text.delete(1.0, tk.END)
+            self.results_text.insert(tk.END, "Top 3 Similar Document Pairs:\n\n")
+            
+            if not prioritized_pairs:
+                self.results_text.insert(tk.END, "No document pairs found for prioritization")
+                return
+            
+            # Show top 3 pairs
+            top_pairs = prioritized_pairs[:min(3, len(prioritized_pairs))]
+            for i, (doc1_path, doc2_path, score) in enumerate(top_pairs, 1):
+                doc1 = file_to_doc.get(doc1_path, None)
+                doc2 = file_to_doc.get(doc2_path, None)
+                
+                doc1_title = doc1.title if doc1 else os.path.basename(doc1_path)
+                doc2_title = doc2.title if doc2 else os.path.basename(doc2_path)
+                
+                self.results_text.insert(tk.END, f"{i}. {doc1_title} <-> {doc2_title}\n")
+                self.results_text.insert(tk.END, f"   Relevance Score: {score:.4f}\n\n")
+            
+        except Exception as e:
+            self.results_text.delete(1.0, tk.END)
+            self.results_text.insert(tk.END, f"Error: {str(e)}")
+        finally:
+            # Clean up temp files
+            for file in os.listdir(temp_dir):
+                os.remove(os.path.join(temp_dir, file))
+            os.rmdir(temp_dir)
 
 if __name__ == "__main__":
     root = tk.Tk()

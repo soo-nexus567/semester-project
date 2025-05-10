@@ -155,18 +155,16 @@ class Huffman:
         if self.original== 0:
             return{
                 "original_size":0,
-                "compression_size": 0,
-                "compression_ratio": 1.0,
-                "space_saving": 0.0
+                "compressed_size": 0,
+                "compression_ratio": 100.0
             }
-        compression_ratio = self.original/self.compressed_byte
-        space_saving = (1 - (self.compressed_byte / self.original)) * 100
+        # Calculate compression ratio as compressed_size/original_size as a percentage
+        compression_ratio = (self.compressed_byte / self.original) * 100
 
         return {
             "original_size": self.original,
             "compressed_size":self.compressed_byte,
-            "compression_ratio": compression_ratio,
-            "space_saving": space_saving
+            "compression_ratio": compression_ratio
         }
 if __name__ == "__main__":
     huff = Huffman()

@@ -94,8 +94,8 @@ def find_matches(doc1, doc2, phrase_length=5):
     
     # Process unique phrases to avoid redundant searches
     for phrase in unique_doc1_phrases:
-        # Only process phrases of sufficient length (avoid matching common single words)
-        if len(phrase) > 10:  # Minimum character length threshold
+        # Only process phrases of sufficient length
+        if len(phrase) > 5:  # Change from 10 to 5
             # Find positions using all algorithms
             doc2_preprocessed = preprocess_text(doc2)
             
