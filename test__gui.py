@@ -5,6 +5,7 @@ from naive import naive_search
 from mergeSort import merge_sort
 from BFS_traversal import bfs
 from DFS_traversal import dfs
+from greedy_optimizer import prioritize_document_pairs
 import re
 import os
 import networkx as nx
@@ -159,9 +160,15 @@ class DocumentAnalysisGUI:
         self.file2_combo = ttk.Combobox(file2_frame, textvariable=self.file2_var, width=50)
         self.file2_combo.pack(side=tk.LEFT, padx=5, expand=True, fill=tk.X)
         
-        # Button for string matching
-        ttk.Button(match_files_frame, text="Find Matches", 
-                command=self.find_string_matches).pack(anchor=tk.W, padx=10, pady=5)
+        # Buttons for string matching
+        buttons_frame = ttk.Frame(match_files_frame)
+        buttons_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        ttk.Button(buttons_frame, text="Find Matches", 
+                command=self.find_string_matches).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Button(buttons_frame, text="Prioritize Documents", 
+                command=self.prioritize_documents).pack(side=tk.LEFT, padx=5)
          
         # Naive search section
         naive_frame = ttk.LabelFrame(self.match_frame, text="Naive String Search")
@@ -929,6 +936,66 @@ class DocumentAnalysisGUI:
             
         except Exception as e:
             messagebox.showerror("Save Error", f"Error saving file: {str(e)}")
+    
+    def prioritize_documents(self):
+        """
+        Run loaded documents through the greedy optimizer to prioritize document pairs
+        for plagiarism detection.
+        """
+        if len(self.documents) < 2:
+            messagebox.showwarning("Warning", "Please add at least two documents to prioritize")
+            return
+        
+        # Clear the results text
+        self.results_text.delete(1.0, tk.END)
+        self.results_text.insert(tk.END, "Analyzing documents...\n")
+        self.results_text.update()
+        
+        # Create a temporary directory with documents
+        temp_dir = os.path.join(os.getcwd(), "temp_docs")
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        try:
+            # Write documents to temp directory
+            file_to_doc = {}
+            for i, doc in enumerate(self.documents):
+                file_name = f"{i}_{doc.title.replace(' ', '_')}.txt"
+                file_path = os.path.join(temp_dir, file_name)
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(doc.content)
+                file_to_doc[file_path] = doc
+            
+            # Run the greedy optimizer
+            prioritized_pairs = prioritize_document_pairs(temp_dir)
+            
+            # Display results
+            self.results_text.delete(1.0, tk.END)
+            self.results_text.insert(tk.END, "Top 3 Similar Document Pairs:\n\n")
+            
+            if not prioritized_pairs:
+                self.results_text.insert(tk.END, "No document pairs found for prioritization")
+                return
+            
+            # Show top 3 pairs
+            top_pairs = prioritized_pairs[:min(3, len(prioritized_pairs))]
+            for i, (doc1_path, doc2_path, score) in enumerate(top_pairs, 1):
+                doc1 = file_to_doc.get(doc1_path, None)
+                doc2 = file_to_doc.get(doc2_path, None)
+                
+                doc1_title = doc1.title if doc1 else os.path.basename(doc1_path)
+                doc2_title = doc2.title if doc2 else os.path.basename(doc2_path)
+                
+                self.results_text.insert(tk.END, f"{i}. {doc1_title} <-> {doc2_title}\n")
+                self.results_text.insert(tk.END, f"   Relevance Score: {score:.4f}\n\n")
+            
+        except Exception as e:
+            self.results_text.delete(1.0, tk.END)
+            self.results_text.insert(tk.END, f"Error: {str(e)}")
+        finally:
+            # Clean up temp files
+            for file in os.listdir(temp_dir):
+                os.remove(os.path.join(temp_dir, file))
+            os.rmdir(temp_dir)
 
 if __name__ == "__main__":
     root = tk.Tk()
